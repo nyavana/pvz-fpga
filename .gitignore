@@ -1,5 +1,6 @@
 # Claude Code per-user config
 .claude/
+CLAUDE.md
 
 # OS junk
 .DS_Store
