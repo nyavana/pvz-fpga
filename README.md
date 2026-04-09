@@ -46,6 +46,45 @@ doc/                       Documentation
   reference-design/bubble-bobble/  Prior team reference project
 ```
 
+## Board setup (first time)
+
+One-time setup for a fresh DE1-SoC.
+
+**MSEL switches.** Flip DIP switch SW10 on the underside of the board to `100000` (positions read left-to-right). This puts the FPGA in FPPx16 mode so U-Boot can load the `.rbf` bitstream from the SD card at boot. The board ships in AS mode (`10010`); it will not boot your design until you change this.
+
+**Serial console.** Connect the mini-USB cable from the board's UART port (J4, upper-right corner) to your workstation and run:
+
+```
+screen /dev/ttyUSB0 115200
+```
+
+Press Control-a then k to kill the session. Boot messages should appear once the board is powered on.
+
+**Network.** After Linux finishes booting, bring up Ethernet:
+
+```
+ifup eth0
+```
+
+Wait a few seconds for DHCP to complete, then verify with `ip addr show eth0`.
+
+**Dev packages.** Install the build tools you will need on the board:
+
+```
+apt update
+apt install -y gcc make kmod libusb-1.0-0-dev usbutils openssh-client git
+```
+
+**Kernel headers.** The kernel module build needs headers installed at `/usr/src/linux-headers-4.19.0`:
+
+```
+wget https://www.cs.columbia.edu/~sedwards/classes/2025/4840-spring/linux-headers-4.19.0.tar.gz
+tar Pzxf linux-headers-4.19.0.tar.gz
+ls /usr/src/linux-headers-4.19.0   # verify the directory exists
+```
+
+The `P` flag preserves the absolute path baked into the tarball, so the headers land where the Makefile expects them.
+
 ## Building, running, and testing
 
 ### Prerequisites
@@ -53,7 +92,10 @@ doc/                       Documentation
 FPGA synthesis runs on Columbia's `micro*.ee.columbia.edu` workstations, which have Quartus Prime and Platform Designer installed. Software compilation can happen either on the workstation (cross-compile) or directly on the DE1-SoC, which has GCC.
 
 - Intel Quartus Prime + Platform Designer, for `make qsys`, `make quartus`, `make rbf`
-- `embedded_command_shell.sh` sourced before running `make dtb` (provides `sopc2dts` and `dtc`; the Makefile prints an error if these are missing)
+- `embedded_command_shell.sh` sourced before running `make dtb` (provides `sopc2dts` and `dtc`; the Makefile prints an error if these are missing). On the Columbia workstations:
+  ```
+  source /tools/intel/intelFPGA/21.1/embedded/embedded_command_shell.sh
+  ```
 - Linux kernel headers at `/usr/src/linux-headers-$(uname -r)`, for building `pvz_driver.ko`
 - GCC and pthread (the game binary links with `-lpthread`)
 
@@ -68,6 +110,8 @@ make quartus    # full synthesis, fitting, timing analysis -> output_files/soc_s
 make rbf        # convert .sof to .rbf for SD card boot
 make dtb        # generate device tree blob (sopc2dts -> .dts, then dtc -> .dtb)
 ```
+
+After building, copy `soc_system.rbf` and `soc_system.dtb` to the SD card and run `sync` before unmounting (see [Deploying to the board](#deploying-to-the-board) below).
 
 | Target | Runs | Output |
 |--------|------|--------|
@@ -101,37 +145,109 @@ You must run `rmmod pvz_driver` before rebuilding the kernel module.
 
 ### Deploying to the board
 
-1. Copy `hw/output_files/soc_system.rbf` and `hw/soc_system.dtb` to the SD card's FAT boot partition.
+Two files change with every hardware rebuild: `hw/output_files/soc_system.rbf` and `hw/soc_system.dtb` (both go on the SD card's FAT boot partition). Software changes produce `sw/pvz` and `sw/pvz_driver.ko`, which go anywhere on the board's Linux filesystem.
 
-2. Insert the SD card and power on the board. You can also test without reflashing by using U-Boot:
-   ```
-   fatload mmc 0:1 $fpgadata soc_system.rbf
-   fpga load 0 $fpgadata $filesize
-   run bridge_enable_handoff
-   ```
+Pick whichever transfer method works for you.
 
-3. Connect to the board's serial console from a workstation:
-   ```
-   screen /dev/ttyUSB0 115200
-   ```
+#### SD card direct mount
 
-4. Load the kernel driver:
-   ```
-   insmod pvz_driver.ko
-   ```
+Pull the SD card from the board, mount it on your workstation, copy, unmount, and reinsert:
 
-5. Verify the driver bound correctly:
-   ```bash
-   dmesg | tail                          # should show probe success
-   cat /proc/iomem                       # confirm ff20xxxx region is claimed
-   ls /proc/device-tree/sopc@0/          # confirm device tree entry exists
-   ```
+```bash
+# On the workstation — device name may differ; check dmesg after inserting
+sudo mount /dev/sdb1 /mnt           # FAT boot partition
+sudo cp hw/output_files/soc_system.rbf /mnt/
+sudo cp hw/soc_system.dtb /mnt/
+sync                                 # flush writes before unmounting
+sudo umount /mnt
+```
 
-6. Run the game:
-   ```
-   ./pvz
-   ```
-   Controls: arrow keys move the cursor, Space places a Peashooter (costs 50 sun), D removes a plant, ESC quits.
+No network needed. This is the most reliable option.
+
+#### SCP over the network
+
+If the board has a working network connection (`ifup eth0`), copy files directly with scp:
+
+```bash
+# From your workstation — replace <board-ip> with the board's IP address
+scp hw/output_files/soc_system.rbf root@<board-ip>:/mnt/
+scp hw/soc_system.dtb root@<board-ip>:/mnt/
+scp sw/pvz sw/pvz_driver.ko root@<board-ip>:~/
+```
+
+The board needs `openssh-client` installed (see [Board setup](#board-setup-first-time) above). Mount the boot partition first on the board: `mount /dev/mmcblk0p1 /mnt`.
+
+#### Git clone on the board
+
+If the board has network access, you can clone the repo and build software directly on it:
+
+```bash
+apt install -y git                   # one-time
+git clone <repo-url>
+cd 4840-final-project/sw && make
+```
+
+After the first clone, just `git pull && make` to pick up changes. Hardware files (`.rbf`, `.dtb`) still have to come from a workstation -- the board does not have Quartus.
+
+#### wget from a workstation HTTP server
+
+Spin up a quick HTTP server on the workstation and pull files from the board:
+
+```bash
+# On the workstation (from the project root):
+cd hw/output_files && python3 -m http.server 8080
+
+# On the board:
+wget http://<workstation-ip>:8080/soc_system.rbf -O /mnt/soc_system.rbf
+```
+
+Useful when scp is acting up but the network itself is fine.
+
+#### ZMODEM over serial
+
+When the network is completely down, you can push files over the serial console. Install `lrzsz` on both the workstation and the board (`apt install -y lrzsz`), then use `sz` (send) and `rz` (receive) inside a terminal emulator that supports ZMODEM (e.g., `picocom` or `minicom`). At 115200 baud you get about 11 KB/s, so this is a last resort.
+
+#### Testing the bitstream with U-Boot
+
+To test a new `.rbf` without booting all the way into Linux, press a key during the U-Boot countdown to drop into its shell, then:
+
+```
+fatload mmc 0:1 $fpgadata soc_system.rbf
+fpga load 0 $fpgadata $filesize
+run bridge_enable_handoff
+```
+
+This configures the FPGA and enables the HPS-to-FPGA bridges. You can poke registers manually to sanity-check your hardware. If your peripheral is mapped at `0xff200000`:
+
+```
+mw.b ff200000 42
+```
+
+Type `boot` to continue the normal Linux boot once you are satisfied.
+
+#### Loading the driver and running the game
+
+Once Linux is running with the new bitstream:
+
+```bash
+insmod pvz_driver.ko
+```
+
+Verify the driver bound correctly:
+
+```bash
+dmesg | tail                          # should show probe success
+cat /proc/iomem                       # confirm ff20xxxx region is claimed
+ls /proc/device-tree/sopc@0/          # confirm device tree entry exists
+```
+
+Run the game:
+
+```
+./pvz
+```
+
+Controls: arrow keys move the cursor, Space places a Peashooter (costs 50 sun), D removes a plant, ESC quits.
 
 ### Testing
 
