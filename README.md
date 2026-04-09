@@ -1,6 +1,6 @@
 # Plants vs Zombies on DE1-SoC
 
-A simplified Plants vs Zombies clone running on the Terasic DE1-SoC (Cyclone V). Final project for Columbia's CSEE 4840 Embedded Systems Design, Spring 2026.
+A simplified Plants vs. Zombies clone running on the Terasic DE1-SoC (Cyclone V). Final project for Columbia's CSEE 4840 Embedded Systems Design, Spring 2026.
 
 The FPGA renders VGA output at 640x480@60 Hz using a hardware shape table, dual linebuffers, and a color-indexed palette. The HPS runs the game loop as a C program under Linux — managing the grid, plants, zombies, projectiles, sun economy, and keyboard input — and pushes shape descriptors to the FPGA each frame through a custom kernel driver and memory-mapped Avalon registers.
 
