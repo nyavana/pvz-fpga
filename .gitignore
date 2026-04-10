@@ -1,6 +1,5 @@
-# AI tool config
+# AI tool config (keep CLAUDE.md tracked — it's project instructions)
 .claude/
-CLAUDE.md
 .codex/
 .gemini/
 
