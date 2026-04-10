@@ -130,8 +130,8 @@ cat /proc/iomem                 # confirm ff20xxxx region is claimed
 
 The game tracks the following state:
 
-- **Grid**: 4 rows by 8 columns. Each cell is either empty or holds a Peashooter with its own fire cooldown timer.
-- **Zombies**: Up to 5 active at once. Each has a row, an x-position in pixels, HP (starts at 3), and a movement counter.
+- **Grid**: 4 rows by 8 columns. Each cell is either empty or holds a Peashooter with its own fire cooldown timer and hit points (HP).
+- **Zombies**: Up to 5 active at once. Each has a row, an x-position in pixels, HP (starts at 3), a movement counter, and an eating state (whether it is currently eating a plant and a bite timer).
 - **Projectiles**: Up to 16 peas in flight. Each has a row and an x-position in pixels.
 - **Cursor**: The player's current row and column selection.
 - **Economy**: Sun counter starting at 100, with passive income of 25 sun every 8 seconds.
@@ -144,7 +144,7 @@ The main loop runs at 60 Hz, paced by `usleep(16667)`:
 1. **Input**: Poll `/dev/input/eventX` for key events. Arrow keys move the cursor, Space places a Peashooter (costs 50 sun), D removes a plant, ESC quits.
 2. **Timers**: Increment frame counter. Award sun income when the sun timer elapses. Decrement spawn countdown.
 3. **Spawn**: When the countdown hits zero and fewer than 5 zombies have been spawned, place a new zombie at a random row entering from the right edge (x = 639).
-4. **Move zombies**: Every `ZOMBIE_SPEED_FRAMES` (3) frames, each zombie's x-position decreases by 1 pixel, giving roughly 20 px/sec of leftward movement.
+4. **Move zombies**: Every `ZOMBIE_SPEED_FRAMES` (3) frames, each zombie's x-position decreases by 1 pixel, giving roughly 20 px/sec of leftward movement. If a zombie enters a cell with a plant in the same row, it stops and starts eating. It deals 1 HP damage every 60 frames (~1 second). When the plant's HP hits 0, the plant is removed and the zombie resumes moving.
 5. **Fire**: Each Peashooter checks whether a zombie exists in its row. If so and the cooldown has expired, it spawns a pea at the plant's column position.
 6. **Move projectiles**: Each pea moves right by `PEA_SPEED` (2) pixels per frame.
 7. **Collision**: For each pea, if it overlaps a zombie in the same row (bounding box check), the zombie loses 1 HP and the pea is deactivated.
@@ -164,7 +164,7 @@ The render step translates the game state into a set of shape descriptors:
 | Cursor | 1 | Yellow rectangle outline around the selected cell |
 | Sun counter | 3 | Three 7-segment digits (white) showing current sun |
 
-Unused shape entries have their visible flag set to 0. Shape indices are allocated with plants in slots 0-31, zombies in 32-41, and projectiles/UI in 42-47.
+Unused shape entries have their visible flag set to 0. Shape indices are allocated in ascending z-order: plants in slots 0-31, zombies in 32-36, projectiles in 37-42, HUD digits in 43-46, and cursor in 47. Higher indices draw on top, so the HUD and cursor are always visible.
 
 ### Input (`sw/input.c`)
 
@@ -417,13 +417,13 @@ Platform device driver that binds to the device tree node matching `"csee4840,pv
 
 #### `sw/game.h` — Game State Definitions
 
-All struct definitions and constants for the game: `plant_t`, `zombie_t`, `projectile_t`, `game_state_t`. Also defines gameplay tuning constants (grid size, HP values, speeds, costs, spawn intervals). All tuning constants live here.
+All struct definitions and constants for the game: `plant_t` (with HP), `zombie_t` (with eating state), `projectile_t`, `game_state_t`. Also defines gameplay tuning constants (grid size, HP values, speeds, costs, spawn intervals, eating cooldown). All tuning constants live here.
 
 - **Used by**: `game.c`, `render.c`, `main.c`, `test_game.c`
 
 #### `sw/game.c` — Game Mechanics
 
-Contains `game_init()` (sets up initial state) and `game_update()` (one frame of game logic). The update function handles zombie movement, peashooter firing, projectile movement, collision detection, sun income, zombie spawning, and win/lose checks. All game rules live here.
+Contains `game_init()` (sets up initial state) and `game_update()` (one frame of game logic). The update function handles zombie movement, zombie-plant collision and eating, peashooter firing, projectile movement, pea-zombie collision detection, sun income, zombie spawning, and win/lose checks. All game rules live here.
 
 - **Depends on**: `game.h`
 - **Called by**: `main.c` (once per frame)
@@ -473,7 +473,7 @@ Opens `/dev/input/eventX` and prints every key event to stdout. Used to verify t
 
 #### `sw/test/test_game.c` — Game Logic Unit Tests
 
-Host-compilable test suite that exercises `game.c` without any hardware. Tests collision detection (pea hits zombie, HP decreases), sun economy (income timing, cost deduction, overdraft prevention), zombie spawning (count limits, row randomization), and win/lose conditions.
+Host-compilable test suite that exercises `game.c` without any hardware. Tests collision detection (pea hits zombie, HP decreases), sun economy (income timing, cost deduction, overdraft prevention), zombie spawning (count limits, row randomization), win/lose conditions, and zombie-plant collision (eating, damage, plant destruction, multi-zombie eating).
 
 - **Depends on**: `game.c`, `game.h`
 - **Run on**: any Linux machine with gcc — no FPGA, driver, or cross-compiler needed

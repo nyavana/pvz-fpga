@@ -14,12 +14,12 @@
  *   42-47: Projectiles (1 shape each, up to 6 visible)
  *          Remaining projectiles not drawn if >6 active
  *
- * Revised allocation to fit 48 entries:
- *   0:     Cursor (1 shape)
- *   1-4:   HUD digits (up to 4 digits for sun counter)
- *   5-36:  Plants: 32 grid cells, 1 shape each (simplified body)
- *   37-41: Zombies: 5 zombies, 1 shape each (simplified body)
- *   42-47: Projectiles: 6 peas, 1 shape each
+ * Revised allocation to fit 48 entries (higher index = drawn on top):
+ *   0-31:  Plants: 32 grid cells, 1 shape each (simplified body)
+ *   32-36: Zombies: 5 zombies, 1 shape each (simplified body)
+ *   37-42: Projectiles: 6 peas, 1 shape each
+ *   43-46: HUD digits (up to 4 digits for sun counter)
+ *   47:    Cursor (1 shape)
  */
 
 #include <stdio.h>
@@ -29,16 +29,16 @@
 
 static int fd;
 
-/* Shape index allocation */
-#define IDX_CURSOR        0
-#define IDX_HUD_START     1
-#define IDX_HUD_COUNT     4
-#define IDX_PLANT_START   5
+/* Shape index allocation (higher index = drawn on top via painter's algorithm) */
+#define IDX_PLANT_START   0
 #define IDX_PLANT_COUNT   32  /* one per grid cell */
-#define IDX_ZOMBIE_START  37
+#define IDX_ZOMBIE_START  32
 #define IDX_ZOMBIE_COUNT  5
-#define IDX_PEA_START     42
+#define IDX_PEA_START     37
 #define IDX_PEA_COUNT     6
+#define IDX_HUD_START     43
+#define IDX_HUD_COUNT     4
+#define IDX_CURSOR        47
 
 /* Color indices (must match color_palette.sv) */
 #define COL_BLACK       0
@@ -182,12 +182,17 @@ static void render_hud(const game_state_t *gs)
         }
     }
 
-    /* Draw digits right-to-left at top of screen */
+    /* Draw digits left-to-right at top of screen.
+     * The hardware draw loop uses s_w as the pixel width bound, but
+     * decode_7seg reads the digit value from s_w[3:0].  Pass w = 32 + digit
+     * so the draw loop covers the full 20-pixel glyph (32 > 20) while
+     * s_w[3:0] still equals the digit value (32 & 0xF == 0). */
     for (int i = 0; i < IDX_HUD_COUNT; i++) {
         int idx = IDX_HUD_START + i;
         if (i < num_digits) {
             int x = 10 + i * 25;
-            write_shape(idx, SHAPE_DIGIT, 1, x, 15, digits[i], 30, COL_WHITE);
+            write_shape(idx, SHAPE_DIGIT, 1, x, 15,
+                        32 + digits[i], 30, COL_WHITE);
         } else {
             hide_shape(idx);
         }

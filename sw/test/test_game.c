@@ -201,6 +201,152 @@ static void test_win_condition(void)
     printf("  test_win_condition: OK\n");
 }
 
+static void test_zombie_stops_at_plant(void)
+{
+    game_state_t gs;
+    game_init(&gs);
+
+    /* Place a plant at row 0, col 3 */
+    gs.grid[0][3].type = PLANT_PEASHOOTER;
+    gs.grid[0][3].hp = PLANT_HP;
+    gs.grid[0][3].fire_cooldown = 99999;
+
+    /* Place zombie in same row, just entering the plant's cell.
+     * Plant at col 3 spans pixels [240, 320).  Put zombie at x=241
+     * so col = 241/80 = 3, which has a plant. */
+    gs.zombies[0].active = 1;
+    gs.zombies[0].row = 0;
+    gs.zombies[0].x_pixel = 241;
+    gs.zombies[0].hp = ZOMBIE_HP;
+    gs.zombies[0].move_counter = ZOMBIE_SPEED_FRAMES - 1; /* will move next frame */
+    gs.zombies[0].eating = 0;
+    gs.zombies[0].eat_timer = 0;
+
+    gs.zombies_spawned = TOTAL_ZOMBIES;
+    gs.spawn_timer = 99999;
+
+    game_update(&gs);
+
+    /* Zombie should have moved to x=240 and started eating */
+    ASSERT(gs.zombies[0].eating == 1, "zombie should be eating the plant");
+    ASSERT(gs.zombies[0].x_pixel == 240, "zombie should have stopped at x=240");
+
+    /* Next frame: zombie should NOT move */
+    int prev_x = gs.zombies[0].x_pixel;
+    game_update(&gs);
+    ASSERT(gs.zombies[0].x_pixel == prev_x,
+           "zombie should not move while eating");
+
+    printf("  test_zombie_stops_at_plant: OK\n");
+}
+
+static void test_zombie_eats_and_destroys_plant(void)
+{
+    game_state_t gs;
+    game_init(&gs);
+
+    /* Place a plant with 1 HP at row 1, col 2 */
+    gs.grid[1][2].type = PLANT_PEASHOOTER;
+    gs.grid[1][2].hp = 1;
+    gs.grid[1][2].fire_cooldown = 99999;
+
+    /* Zombie already eating with timer about to expire */
+    gs.zombies[0].active = 1;
+    gs.zombies[0].row = 1;
+    gs.zombies[0].x_pixel = 2 * CELL_WIDTH; /* col 2 */
+    gs.zombies[0].hp = ZOMBIE_HP;
+    gs.zombies[0].move_counter = 0;
+    gs.zombies[0].eating = 1;
+    gs.zombies[0].eat_timer = 1; /* will bite next frame */
+
+    gs.zombies_spawned = TOTAL_ZOMBIES;
+    gs.spawn_timer = 99999;
+
+    game_update(&gs);
+
+    ASSERT(gs.grid[1][2].type == PLANT_NONE,
+           "plant should be destroyed after last HP eaten");
+    ASSERT(gs.zombies[0].eating == 0,
+           "zombie should stop eating after plant destroyed");
+
+    printf("  test_zombie_eats_and_destroys_plant: OK\n");
+}
+
+static void test_zombie_resumes_after_eating(void)
+{
+    game_state_t gs;
+    game_init(&gs);
+
+    /* Zombie was eating but plant is already gone (e.g. destroyed by
+     * another zombie). */
+    gs.zombies[0].active = 1;
+    gs.zombies[0].row = 0;
+    gs.zombies[0].x_pixel = 3 * CELL_WIDTH;
+    gs.zombies[0].hp = ZOMBIE_HP;
+    gs.zombies[0].move_counter = ZOMBIE_SPEED_FRAMES - 1;
+    gs.zombies[0].eating = 1;
+    gs.zombies[0].eat_timer = 10;
+
+    /* No plant at col 3 */
+    gs.grid[0][3].type = PLANT_NONE;
+
+    gs.zombies_spawned = TOTAL_ZOMBIES;
+    gs.spawn_timer = 99999;
+
+    game_update(&gs);
+
+    ASSERT(gs.zombies[0].eating == 0,
+           "zombie should clear eating state when plant is gone");
+    /* Zombie should have moved (move_counter was at threshold-1, then
+     * incremented to threshold and moved) */
+    ASSERT(gs.zombies[0].x_pixel == 3 * CELL_WIDTH - 1,
+           "zombie should resume moving after plant is gone");
+
+    printf("  test_zombie_resumes_after_eating: OK\n");
+}
+
+static void test_two_zombies_eat_same_plant(void)
+{
+    game_state_t gs;
+    game_init(&gs);
+
+    /* Place a plant with 2 HP at row 0, col 4 */
+    gs.grid[0][4].type = PLANT_PEASHOOTER;
+    gs.grid[0][4].hp = 2;
+    gs.grid[0][4].fire_cooldown = 99999;
+
+    /* Two zombies eating the same plant, both about to bite */
+    for (int i = 0; i < 2; i++) {
+        gs.zombies[i].active = 1;
+        gs.zombies[i].row = 0;
+        gs.zombies[i].x_pixel = 4 * CELL_WIDTH + i; /* both in col 4 */
+        gs.zombies[i].hp = ZOMBIE_HP;
+        gs.zombies[i].move_counter = 0;
+        gs.zombies[i].eating = 1;
+        gs.zombies[i].eat_timer = 1;
+    }
+
+    gs.zombies_spawned = TOTAL_ZOMBIES;
+    gs.spawn_timer = 99999;
+
+    game_update(&gs);
+
+    /* Both bitten; plant had 2 HP so should be destroyed */
+    ASSERT(gs.grid[0][4].type == PLANT_NONE,
+           "plant should be destroyed by two simultaneous bites");
+    /* Zombie 1 (processed second) destroyed the plant and cleared its
+     * eating state.  Zombie 0 will discover the plant is gone next frame. */
+    ASSERT(gs.zombies[1].eating == 0,
+           "zombie 1 should stop eating after plant destroyed");
+
+    /* Second frame: zombie 0 re-checks and finds plant gone */
+    game_update(&gs);
+    ASSERT(gs.zombies[0].eating == 0,
+           "zombie 0 should stop eating once it notices plant is gone");
+
+    printf("  test_two_zombies_eat_same_plant: OK\n");
+}
+
 int main(void)
 {
     srand(42); /* Deterministic for testing */
@@ -215,6 +361,10 @@ int main(void)
     test_zombie_death();
     test_lose_condition();
     test_win_condition();
+    test_zombie_stops_at_plant();
+    test_zombie_eats_and_destroys_plant();
+    test_zombie_resumes_after_eating();
+    test_two_zombies_eat_same_plant();
 
     printf("\nResults: %d passed, %d failed\n",
            tests_passed, tests_failed);
