@@ -25,6 +25,7 @@
 #define SHAPE_RECT    0
 #define SHAPE_CIRCLE  1
 #define SHAPE_DIGIT   2
+#define SHAPE_SPRITE  3  /* 32x32 sprite ROM, rendered at 2x -> 64x64 on screen */
 
 /* Background cell write argument */
 typedef struct {

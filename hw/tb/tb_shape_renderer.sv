@@ -31,6 +31,12 @@ module tb_shape_renderer;
     logic [9:0] lb_wr_addr;
     logic [7:0] lb_wr_data;
 
+    /* verilator lint_off UNUSED */
+    logic [9:0] sprite_rd_addr;
+    /* verilator lint_on UNUSED */
+    logic [7:0] sprite_rd_pixel;
+    assign sprite_rd_pixel = 8'hFF; // not exercising sprite type in this TB
+
     shape_renderer dut(.*);
 
     initial clk = 0;

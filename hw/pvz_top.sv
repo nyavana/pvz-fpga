@@ -153,6 +153,18 @@ module pvz_top(
     );
 
     // ---------------------------------------------------------------
+    // Sprite ROM (32x32 peashooter, 1024x8-bit)
+    // ---------------------------------------------------------------
+    logic [9:0] sprite_rd_addr;
+    logic [7:0] sprite_rd_pixel;
+
+    sprite_rom sprite_inst(
+        .clk(clk),
+        .addr(sprite_rd_addr),
+        .pixel(sprite_rd_pixel)
+    );
+
+    // ---------------------------------------------------------------
     // Shape renderer
     // ---------------------------------------------------------------
     /* verilator lint_off UNUSED */
@@ -176,6 +188,8 @@ module pvz_top(
         .shape_w(st_rd_w),
         .shape_h(st_rd_h),
         .shape_color(st_rd_color),
+        .sprite_rd_addr(sprite_rd_addr),
+        .sprite_rd_pixel(sprite_rd_pixel),
         .lb_wr_en(lb_wr_en),
         .lb_wr_addr(lb_wr_addr),
         .lb_wr_data(lb_wr_data)

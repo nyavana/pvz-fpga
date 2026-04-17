@@ -10,6 +10,8 @@ See [`doc/proposal/proposal.md`](doc/proposal/proposal.md) for the full design a
 
 **Milestone 1 (MVP) complete.** Single-level playable demo with primitive-shape graphics (rectangles, circles, 7-segment digits), keyboard control, one plant type (Peashooter), and five zombies. No sprites, audio, or USB gamepad yet. See [`doc/milestone1.md`](doc/milestone1.md) for details.
 
+**Post-MVP bugfixes applied:** Fixed 7-segment digit rendering (draw loop width mismatch), HUD z-order (HUD now renders on top of game objects), and zombie-plant collision (zombies now stop and eat plants). See [`doc/bugfix-display-collision.md`](doc/bugfix-display-collision.md) for details.
+
 ## Repository layout
 
 ```
@@ -179,7 +181,7 @@ Or compile it standalone:
 gcc -Wall -O2 -o test_game test/test_game.c game.c && ./test_game
 ```
 
-The test suite covers eight areas:
+The test suite covers twelve areas:
 
 | Test | What it checks |
 |------|---------------|
@@ -191,6 +193,10 @@ The test suite covers eight areas:
 | `test_zombie_death` | Zombie with 1 HP left dies on the next collision hit |
 | `test_lose_condition` | Game state becomes LOSE when a zombie reaches x <= 0 |
 | `test_win_condition` | Game state becomes WIN after all 5 zombies have spawned and been killed |
+| `test_zombie_stops_at_plant` | Zombie enters a cell with a plant, starts eating, and stops moving |
+| `test_zombie_eats_and_destroys_plant` | Zombie deals damage over time, plant is removed when HP reaches 0 |
+| `test_zombie_resumes_after_eating` | Zombie clears eating state and resumes moving when the plant is gone |
+| `test_two_zombies_eat_same_plant` | Two zombies eat the same plant simultaneously; both resume after it is destroyed |
 
 Uses `srand(42)` for deterministic zombie spawns. Exits 0 if every test passes, 1 if any fail.
 

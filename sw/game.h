@@ -17,6 +17,7 @@
 /* Plant constants */
 #define PLANT_COST         50
 #define PLANT_FIRE_COOLDOWN 120  /* frames (2 seconds at 60fps) */
+#define PLANT_HP            3    /* hits before a plant is destroyed */
 
 /* Zombie constants */
 #define MAX_ZOMBIES          5
@@ -27,6 +28,7 @@
 #define TOTAL_ZOMBIES        5
 #define ZOMBIE_SPAWN_MIN    (8 * 60)  /* 8 seconds in frames */
 #define ZOMBIE_SPAWN_MAX    (15 * 60) /* 15 seconds in frames */
+#define ZOMBIE_EAT_COOLDOWN 60       /* frames between bites (~1 sec at 60fps) */
 
 /* Projectile constants */
 #define MAX_PROJECTILES     16
@@ -51,6 +53,7 @@
 typedef struct {
     int type;           /* PLANT_NONE or PLANT_PEASHOOTER */
     int fire_cooldown;  /* frames until next shot */
+    int hp;             /* hit points remaining */
 } plant_t;
 
 typedef struct {
@@ -59,6 +62,8 @@ typedef struct {
     int x_pixel;        /* pixel x position (moves leftward) */
     int hp;
     int move_counter;   /* counts frames until next pixel move */
+    int eating;         /* 1 if currently eating a plant */
+    int eat_timer;      /* frames until next bite */
 } zombie_t;
 
 typedef struct {

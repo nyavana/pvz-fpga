@@ -42,6 +42,7 @@ int game_place_plant(game_state_t *gs)
 
     gs->grid[r][c].type = PLANT_PEASHOOTER;
     gs->grid[r][c].fire_cooldown = PLANT_FIRE_COOLDOWN;
+    gs->grid[r][c].hp = PLANT_HP;
     gs->sun -= PLANT_COST;
     return 1;
 }
@@ -84,7 +85,7 @@ static void spawn_pea(game_state_t *gs, int row, int col)
     /* No free slot; pea is lost */
 }
 
-/* Update zombie positions and check for lose condition */
+/* Update zombie positions, eating, and check for lose condition */
 static void update_zombies(game_state_t *gs)
 {
     for (int i = 0; i < MAX_ZOMBIES; i++) {
@@ -92,6 +93,34 @@ static void update_zombies(game_state_t *gs)
         if (!z->active)
             continue;
 
+        if (z->eating) {
+            /* Re-check that the plant still exists (another zombie may
+             * have destroyed it) */
+            int col = z->x_pixel / CELL_WIDTH;
+            if (col < 0 || col >= GRID_COLS ||
+                gs->grid[z->row][col].type == PLANT_NONE) {
+                z->eating = 0;
+                z->eat_timer = 0;
+                /* Fall through to movement below */
+            } else {
+                /* Continue eating: deal damage on timer */
+                z->eat_timer--;
+                if (z->eat_timer <= 0) {
+                    gs->grid[z->row][col].hp--;
+                    if (gs->grid[z->row][col].hp <= 0) {
+                        gs->grid[z->row][col].type = PLANT_NONE;
+                        gs->grid[z->row][col].fire_cooldown = 0;
+                        gs->grid[z->row][col].hp = 0;
+                        z->eating = 0;
+                    } else {
+                        z->eat_timer = ZOMBIE_EAT_COOLDOWN;
+                    }
+                }
+                continue; /* Don't move while eating */
+            }
+        }
+
+        /* Movement */
         z->move_counter++;
         if (z->move_counter >= ZOMBIE_SPEED_FRAMES) {
             z->move_counter = 0;
@@ -101,6 +130,14 @@ static void update_zombies(game_state_t *gs)
             if (z->x_pixel <= 0) {
                 gs->state = STATE_LOSE;
                 return;
+            }
+
+            /* Check for plant collision after moving */
+            int col = z->x_pixel / CELL_WIDTH;
+            if (col >= 0 && col < GRID_COLS &&
+                gs->grid[z->row][col].type != PLANT_NONE) {
+                z->eating = 1;
+                z->eat_timer = ZOMBIE_EAT_COOLDOWN;
             }
         }
     }
@@ -191,6 +228,8 @@ static void update_spawning(game_state_t *gs)
                 gs->zombies[i].x_pixel = SCREEN_W - 1;
                 gs->zombies[i].hp = ZOMBIE_HP;
                 gs->zombies[i].move_counter = 0;
+                gs->zombies[i].eating = 0;
+                gs->zombies[i].eat_timer = 0;
                 gs->zombies_spawned++;
                 break;
             }

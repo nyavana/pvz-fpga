@@ -5,10 +5,12 @@
  * writes pixels to the linebuffer draw port. Later shapes overwrite
  * earlier ones (painter's algorithm / z-order by index).
  *
- * Supports three shape types:
+ * Supports four shape types:
  *   0 = filled rectangle
  *   1 = filled circle (bounding-box + distance check)
  *   2 = 7-segment digit (digit value in w[3:0])
+ *   3 = sprite (32x32 ROM, rendered at 2x scale -> 64x64 on screen;
+ *               pixel value 0xFF is transparent)
  *
  * Operation:
  *   1. On render_start pulse, begin background fill from bg_grid
@@ -41,6 +43,10 @@ module shape_renderer(
     input  logic [8:0]  shape_w,
     input  logic [8:0]  shape_h,
     input  logic [7:0]  shape_color,
+
+    // Sprite ROM read port (combinational addr, 1-cycle registered pixel)
+    output logic [9:0]  sprite_rd_addr,
+    input  logic [7:0]  sprite_rd_pixel,
 
     // Linebuffer write port
     output logic        lb_wr_en,
@@ -75,6 +81,18 @@ module shape_renderer(
     logic [8:0]  s_w;
     logic [8:0]  s_h;
     logic [7:0]  s_color;
+
+    // Sprite pipeline (1-cycle ROM read latency)
+    logic        sprite_pending;
+    logic [9:0]  sprite_pending_addr;
+
+    // Combinational sprite ROM address: 2x downscale from screen to ROM (32x32)
+    // rom_x = (draw_x - s_x) >> 1, rom_y = (scanline - s_y) >> 1
+    /* verilator lint_off UNUSED */
+    wire [9:0] sprite_local_x = draw_x - s_x;
+    wire [9:0] sprite_local_y = scanline - {1'b0, s_y};
+    /* verilator lint_on UNUSED */
+    assign sprite_rd_addr = {sprite_local_y[5:1], sprite_local_x[5:1]};
 
     // (Circle and 7-seg helpers are computed inline in S_SHAPE_DRAW)
 
@@ -135,6 +153,8 @@ module shape_renderer(
             cur_shape  <= 6'd0;
             draw_x     <= 10'd0;
             shape_index <= 6'd0;
+            sprite_pending      <= 1'b0;
+            sprite_pending_addr <= 10'd0;
         end else begin
             lb_wr_en <= 1'b0; // default: no write
 
@@ -189,14 +209,43 @@ module shape_renderer(
                         end
                     end else begin
                         // Shape overlaps scanline: start drawing
-                        draw_x <= s_x;
-                        state  <= S_SHAPE_DRAW;
+                        draw_x         <= s_x;
+                        sprite_pending <= 1'b0;
+                        state          <= S_SHAPE_DRAW;
                     end
                 end
 
                 // Draw pixels for the current shape on this scanline
                 S_SHAPE_DRAW: begin
-                    if (draw_x >= s_x + {1'b0, s_w} || draw_x >= 10'd640) begin
+                    if (s_type == 2'd3) begin
+                        // Sprite path: ROM has 1-cycle latency, pipeline writes
+                        // Commit pending write from previous cycle
+                        if (sprite_pending && sprite_rd_pixel != 8'hFF) begin
+                            lb_wr_en   <= 1'b1;
+                            lb_wr_addr <= sprite_pending_addr;
+                            lb_wr_data <= sprite_rd_pixel;
+                        end
+
+                        // Default: clear pending (overridden below if issuing)
+                        sprite_pending <= 1'b0;
+
+                        if (draw_x < s_x + {1'b0, s_w} && draw_x < 10'd640) begin
+                            // Issue next fetch
+                            sprite_pending      <= 1'b1;
+                            sprite_pending_addr <= draw_x;
+                            draw_x              <= draw_x + 10'd1;
+                        end else if (!sprite_pending) begin
+                            // All pixels issued AND flushed: move on
+                            if (cur_shape == 6'd47) begin
+                                state <= S_DONE;
+                            end else begin
+                                cur_shape   <= cur_shape + 6'd1;
+                                shape_index <= cur_shape + 6'd1;
+                                state       <= S_SHAPE_SETUP;
+                            end
+                        end
+                        // else: last fetch being flushed this cycle, stay one more
+                    end else if (draw_x >= s_x + {1'b0, s_w} || draw_x >= 10'd640) begin
                         // Done with this shape
                         if (cur_shape == 6'd47) begin
                             state <= S_DONE;
