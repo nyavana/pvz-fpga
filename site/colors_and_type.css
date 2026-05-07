@@ -1,0 +1,290 @@
+/* ============================================================================
+   PvZ-FPGA Design System — Colors & Type
+   ----------------------------------------------------------------------------
+   The 13-color hardware palette (color_palette.sv) is the spec. We map those
+   8-bit-indexed RGBs into the design system as `--pal-*` "raw hardware" tokens,
+   then layer screen-friendly versions (`--ink-*`, `--lawn-*`, etc.) on top so
+   long-form web reading isn't punishing.
+
+   Two type stacks:
+     • "press"  — pixel display font for titles, badges, HUD-style chrome
+     • "body"   — humanist sans for paragraphs, lists, captions
+     • "mono"   — fixed-width for code, registers, addresses
+============================================================================ */
+
+@font-face {
+  font-family: "PressStart";
+  src: url("fonts/PressStart2P-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "VT323";
+  src: url("fonts/VT323-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "InterVar";
+  src: url("fonts/Inter-Variable.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrainsMono";
+  src: url("fonts/JetBrainsMono-Variable.woff2") format("woff2-variations");
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* ──────────────────────────────────────────────────────────────────
+     RAW HARDWARE PALETTE (color_palette.sv, indices 0–12)
+     These are the on-board VGA values. Use ONLY for game chrome,
+     HUD blocks, the pixel-art canvas, retro accents.
+     ────────────────────────────────────────────────────────────────── */
+  --pal-00-black:        #000000;
+  --pal-01-dark-green:   #1B5E20;
+  --pal-02-light-green:  #2D8B2D;
+  --pal-03-brown:        #8B4513;
+  --pal-04-yellow:       #FFD700;
+  --pal-05-red:          #FF0000;
+  --pal-06-dark-red:     #8B0000;
+  --pal-07-green:        #008000;
+  --pal-08-dark-green2:  #006400;
+  --pal-09-bright-green: #00FF00;
+  --pal-10-white:        #FFFFFF;
+  --pal-11-gray:         #808080;
+  --pal-12-orange:       #FFA500;
+
+  /* ──────────────────────────────────────────────────────────────────
+     WEB-READABLE LAWN — softened greens for backgrounds, sections,
+     lawn stripes on the website. Tuned in oklch from the dark-green
+     hardware index for AAA-friendly contrast.
+     ────────────────────────────────────────────────────────────────── */
+  --lawn-50:   #F1F8EE;
+  --lawn-100:  #DDEFD3;
+  --lawn-200:  #B7DDA5;
+  --lawn-300:  #84C572;
+  --lawn-400:  #4FA64A;   /* checkerboard light  */
+  --lawn-500:  #2F8A36;   /* checkerboard dark   */
+  --lawn-600:  #226E2A;
+  --lawn-700:  #1B5722;
+  --lawn-800:  #143E1A;
+  --lawn-900:  #0D2812;
+
+  /* ──────────────────────────────────────────────────────────────────
+     INK — neutrals. Warm, slightly green-leaning to feel grown-from-the-
+     lawn rather than corporate slate.
+     ────────────────────────────────────────────────────────────────── */
+  --ink-0:    #FFFFFF;
+  --ink-50:   #FAFAF6;
+  --ink-100:  #F1F0E8;
+  --ink-200:  #E2E1D6;
+  --ink-300:  #C7C5B5;
+  --ink-400:  #9A998A;
+  --ink-500:  #6E6D60;
+  --ink-600:  #4D4C42;
+  --ink-700:  #34332C;
+  --ink-800:  #1F1F1A;
+  --ink-900:  #0E0E0B;
+
+  /* ──────────────────────────────────────────────────────────────────
+     SUN — the sun-economy yellow + orange, dialed in for type contrast
+     ────────────────────────────────────────────────────────────────── */
+  --sun-100: #FFF6CC;
+  --sun-300: #FFE164;
+  --sun-500: #F4B400;   /* primary sun */
+  --sun-700: #B27300;
+  --sun-900: #5C3A00;
+
+  /* ──────────────────────────────────────────────────────────────────
+     ZOMBIE — desaturated reds/grays. Don't use the raw FF0000.
+     ────────────────────────────────────────────────────────────────── */
+  --zombie-100: #F4DCDA;
+  --zombie-300: #D88983;
+  --zombie-500: #B23A33;   /* zombie warning */
+  --zombie-700: #7A1F1A;
+  --zombie-900: #3E0D0A;
+
+  /* ──────────────────────────────────────────────────────────────────
+     SILICON — the FPGA / lab-bench identity. Cool grays and a
+     "trace cyan" for circuits, registers, signal callouts.
+     ────────────────────────────────────────────────────────────────── */
+  --silicon-50:  #F2F4F7;
+  --silicon-100: #DADFE6;
+  --silicon-200: #B0B8C4;
+  --silicon-400: #6F7C90;
+  --silicon-600: #404C5F;
+  --silicon-800: #1E2632;
+  --silicon-900: #0E141C;
+  --trace-cyan:  #36D6E0;
+  --trace-mag:   #E04FB0;
+
+  /* ──────────────────────────────────────────────────────────────────
+     SEMANTIC TOKENS — what designers/devs should actually reach for
+     ────────────────────────────────────────────────────────────────── */
+  --bg-page:        var(--ink-50);
+  --bg-elevated:    var(--ink-0);
+  --bg-section:     var(--lawn-50);
+  --bg-night:       var(--silicon-900);
+
+  --fg-primary:     var(--ink-900);
+  --fg-secondary:   var(--ink-600);
+  --fg-muted:       var(--ink-400);
+  --fg-on-dark:     var(--ink-50);
+  --fg-on-lawn:     var(--ink-0);
+
+  --accent-plant:   var(--lawn-600);
+  --accent-sun:     var(--sun-500);
+  --accent-zombie:  var(--zombie-500);
+  --accent-fpga:    var(--silicon-800);
+  --accent-trace:   var(--trace-cyan);
+
+  --border-subtle:  var(--ink-200);
+  --border-strong:  var(--ink-300);
+  --border-pixel:   var(--ink-900);
+
+  /* ──────────────────────────────────────────────────────────────────
+     TYPE — three families, deliberately mixed
+     ────────────────────────────────────────────────────────────────── */
+  --font-press:  "PressStart", "Courier New", monospace;       /* 8-bit titles  */
+  --font-term:   "VT323", "Courier New", monospace;            /* HUD / numbers */
+  --font-body:   "InterVar", "Inter", -apple-system, "Segoe UI", system-ui, sans-serif;
+  --font-mono:   "JetBrainsMono", "JetBrains Mono", "SF Mono", Menlo, monospace;
+
+  /* Type scale (web reading sizes) */
+  --fs-display:  64px;
+  --fs-h1:       44px;
+  --fs-h2:       32px;
+  --fs-h3:       22px;
+  --fs-body-lg:  18px;
+  --fs-body:     16px;
+  --fs-small:    14px;
+  --fs-caption:  12px;
+  --fs-pixel-lg: 28px;   /* PressStart titles    */
+  --fs-pixel:    16px;   /* PressStart body      */
+  --fs-pixel-sm: 10px;   /* PressStart badges    */
+
+  --lh-tight:   1.10;
+  --lh-snug:    1.25;
+  --lh-normal:  1.5;
+  --lh-loose:   1.7;
+
+  --tracking-pixel: 0.08em;
+  --tracking-caps:  0.14em;
+
+  /* ──────────────────────────────────────────────────────────────────
+     SPACING — based on an 8-pixel grid, echoing the 80×90 cells
+     ────────────────────────────────────────────────────────────────── */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  24px;
+  --space-6:  32px;
+  --space-7:  48px;
+  --space-8:  64px;
+  --space-9:  96px;
+  --space-10: 128px;
+
+  /* RADII — small. We're 8-bit. Most things are square. */
+  --radius-0:  0px;       /* default: hard pixel corners */
+  --radius-1:  2px;
+  --radius-2:  4px;
+  --radius-3:  8px;       /* soft web cards */
+  --radius-pill: 999px;
+
+  /* SHADOWS — pixel-stepped, no gaussian blur on game chrome */
+  --shadow-pixel-1: 2px 2px 0 0 var(--ink-900);
+  --shadow-pixel-2: 4px 4px 0 0 var(--ink-900);
+  --shadow-pixel-3: 6px 6px 0 0 var(--ink-900);
+  --shadow-soft-1:  0 1px 2px rgba(14,14,11,.08);
+  --shadow-soft-2:  0 4px 16px rgba(14,14,11,.10);
+  --shadow-card:    0 2px 0 var(--ink-200), 0 6px 18px rgba(14,14,11,.06);
+}
+
+/* ============================================================================
+   SEMANTIC ELEMENTS
+============================================================================ */
+
+html, body {
+  background: var(--bg-page);
+  color: var(--fg-primary);
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-normal);
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, .h1 {
+  font-family: var(--font-press);
+  font-size: var(--fs-h1);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-pixel);
+  color: var(--fg-primary);
+  margin: 0 0 var(--space-5);
+}
+h2, .h2 {
+  font-family: var(--font-press);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--tracking-pixel);
+  color: var(--fg-primary);
+  margin: 0 0 var(--space-4);
+}
+h3, .h3 {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: var(--fs-h3);
+  line-height: var(--lh-snug);
+  margin: 0 0 var(--space-3);
+}
+p {
+  font-size: var(--fs-body);
+  line-height: var(--lh-loose);
+  margin: 0 0 var(--space-4);
+  text-wrap: pretty;
+  max-width: 64ch;
+}
+small, .small { font-size: var(--fs-small); color: var(--fg-secondary); }
+.caption {
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+code, kbd, .code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  background: var(--silicon-50);
+  color: var(--silicon-800);
+  padding: 1px 6px;
+  border-radius: var(--radius-1);
+  border: 1px solid var(--silicon-100);
+}
+
+.pixel {
+  font-family: var(--font-press);
+  letter-spacing: var(--tracking-pixel);
+  image-rendering: pixelated;
+}
+.term {
+  font-family: var(--font-term);
+  letter-spacing: 0.02em;
+}
+.eyebrow {
+  font-family: var(--font-press);
+  font-size: var(--fs-pixel-sm);
+  letter-spacing: var(--tracking-pixel);
+  text-transform: uppercase;
+  color: var(--accent-plant);
+}
