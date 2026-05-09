@@ -75,8 +75,7 @@ static void render_cursor(const game_state_t *gs)
 
 static void render_sun(const game_state_t *gs)
 {
-    /* HW currently doesn't draw the sun count; the register is reserved
-     * so a future HUD module can pick it up. */
+    /* HUD draws 10 yellow blocks, one per 100 sun. */
     write_reg(PVZ_REG_SUN, gs->sun & 0x3FFF);
 }
 

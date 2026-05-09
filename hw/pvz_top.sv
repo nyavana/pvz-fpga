@@ -81,9 +81,7 @@ module pvz_top(
     logic        cursor_visible;
     logic [2:0]  cursor_col;
     logic [1:0]  cursor_row;
-    /* verilator lint_off UNUSED */
     logic [13:0] sun_value;
-    /* verilator lint_on UNUSED */
 
     // ---------------------------------------------------------------
     // Avalon-MM write decode
@@ -157,14 +155,23 @@ module pvz_top(
     );
 
     // ---------------------------------------------------------------
-    // Sprite ROM (32x32 peashooter, 1024 bytes, 1-cycle read latency)
+    // Sprite ROMs (64x64 each, 4096 bytes, 1-cycle read latency).
+    // One ROM per sprite type; both share the same module.
     // ---------------------------------------------------------------
-    logic [9:0] sprite_addr;
-    logic [7:0] sprite_pixel;
-    sprite_rom sprite_inst(
+    logic [11:0] plant_addr;
+    logic [7:0]  plant_pixel;
+    sprite_rom #(.MEM_FILE("peashooter_idx.mem")) plant_rom_inst(
         .clk  (clk),
-        .addr (sprite_addr),
-        .pixel(sprite_pixel)
+        .addr (plant_addr),
+        .pixel(plant_pixel)
+    );
+
+    logic [11:0] zombie_addr;
+    logic [7:0]  zombie_pixel;
+    sprite_rom #(.MEM_FILE("zombie_idx.mem")) zombie_rom_inst(
+        .clk  (clk),
+        .addr (zombie_addr),
+        .pixel(zombie_pixel)
     );
 
     // ---------------------------------------------------------------
@@ -187,8 +194,11 @@ module pvz_top(
         .cursor_visible  (cursor_visible),
         .cursor_col      (cursor_col),
         .cursor_row      (cursor_row),
-        .sprite_rd_addr  (sprite_addr),
-        .sprite_rd_pixel (sprite_pixel),
+        .sun_value       (sun_value),
+        .plant_rd_addr   (plant_addr),
+        .plant_rd_pixel  (plant_pixel),
+        .zombie_rd_addr  (zombie_addr),
+        .zombie_rd_pixel (zombie_pixel),
         .color_out       (pixel_color)
     );
 

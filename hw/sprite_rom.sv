@@ -1,23 +1,25 @@
 /*
- * Sprite ROM — 32x32 palette-indexed sprite
+ * Sprite ROM — 64x64 palette-indexed sprite
  *
- * Stores 1024 bytes loaded from peas_idx.mem at synthesis / simulation.
+ * Stores 4096 bytes loaded from MEM_FILE at synthesis / simulation.
  * Each byte is:
  *   0x00-0x0C : palette index (matches color_palette.sv)
  *   0xFF      : transparent (renderer must skip write)
  *
  * Read latency: 1 clock (inferred M10K block RAM).
  */
-module sprite_rom(
+module sprite_rom #(
+    parameter MEM_FILE = "peashooter_idx.mem"
+) (
     input  logic        clk,
-    input  logic [9:0]  addr,   // 0..1023 = y*32 + x
+    input  logic [11:0] addr,   // 0..4095 = y*64 + x
     output logic [7:0]  pixel
 );
 
-    logic [7:0] rom [0:1023];
+    logic [7:0] rom [0:4095];
 
     initial begin
-        $readmemh("peas_idx.mem", rom);
+        $readmemh(MEM_FILE, rom);
     end
 
     always_ff @(posedge clk)

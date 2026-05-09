@@ -33,7 +33,8 @@ add_fileset_file bg_grid.sv SYSTEM_VERILOG PATH bg_grid.sv
 add_fileset_file entity_drawer.sv SYSTEM_VERILOG PATH entity_drawer.sv
 add_fileset_file color_palette.sv SYSTEM_VERILOG PATH color_palette.sv
 add_fileset_file sprite_rom.sv SYSTEM_VERILOG PATH sprite_rom.sv
-add_fileset_file peas_idx.mem OTHER PATH peas_idx.mem
+add_fileset_file peashooter_idx.mem OTHER PATH peashooter_idx.mem
+add_fileset_file zombie_idx.mem OTHER PATH zombie_idx.mem
 
 # Clock interface
 add_interface clock clock end
