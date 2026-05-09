@@ -95,7 +95,7 @@ module entity_drawer(
     localparam logic [9:0]  SUN_BW    = 10'd16;  // block width
     localparam logic [9:0]  SUN_BH    = 10'd24;  // block height
     localparam logic [9:0]  SUN_PITCH = 10'd18;  // block + 2 px gap
-    localparam logic [13:0] SUN_PER_BLOCK = 14'd100;
+    localparam logic [13:0] SUN_PER_BLOCK = 14'd50;
 
     // ---------------------------------------------------------------
     // Unpack the zombie/pea arrays into indexable arrays
@@ -215,7 +215,7 @@ module entity_drawer(
             for (int i = 0; i < 10; i++) begin
                 logic [9:0] bx;
                 bx = SUN_X + 10'(i) * SUN_PITCH;
-                if (sun_value >= 14'((i+1) * 100) &&
+                if (sun_value >= 14'((i+1) * 50) &&
                     px >= bx && px < bx + SUN_BW)
                     sun_hit_comb = 1'b1;
             end

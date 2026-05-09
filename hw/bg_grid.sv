@@ -7,7 +7,7 @@
  *
  * Output: given pixel (px, py), returns the background color index.
  *   - in game area: dark green or light green light_cell
- *   - outside    : black
+ *   - outside    : blue
  *
  * Cell math uses bit slices because 64 = 2^6.
  */
@@ -22,6 +22,7 @@ module bg_grid(
     localparam logic [7:0] COL_BLACK       = 8'd0;
     localparam logic [7:0] COL_DARK_GREEN  = 8'd1;
     localparam logic [7:0] COL_LIGHT_GREEN = 8'd2;
+    localparam logic [7:0] COL_BLUE = 8'd13;
 
     // Game area bounds
     localparam logic [9:0] GRID_X = 10'd64;
@@ -45,7 +46,7 @@ module bg_grid(
 
     always_comb begin
         if (!in_grid)
-            color_out = COL_BLACK;
+            color_out = COL_BLUE;
         else if (light_cell)
             color_out = COL_LIGHT_GREEN;
         else
