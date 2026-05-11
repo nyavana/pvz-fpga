@@ -8,13 +8,14 @@
  *
  * Layering (low to high; later overwrites earlier):
  *   1. bg          (lawn checker, from bg_grid)
- *   2. plant       (32x32 sprite ROM, scaled 2x to fill 64x64 cell)
+ *   2. plant       (64x64 sprite ROM, 1:1)
  *   3. pea         (small bright-green square)
- *   4. zombie      (red rectangle)
+ *   4. zombie      (64x64 sprite ROM, 1:1, with transparency)
  *   5. cursor      (yellow border around cursor cell)
+ *   6. sun HUD     (yellow blocks at top, one per 100 sun)
  *
- * Sprite ROM has 1 clock of read latency.  Stage 1 issues the address
- * combinationally, stage 2 (one cycle later) merges the ROM output with
+ * Sprite ROMs have 1 clock of read latency.  Stage 1 issues addresses
+ * combinationally, stage 2 (one cycle later) merges the ROM outputs with
  * the registered overlay hits.  Final color is registered so the VGA
  * data path stays clean.
  *
@@ -55,9 +56,16 @@ module entity_drawer(
     input  logic [2:0]  cursor_col,
     input  logic [1:0]  cursor_row,
 
-    // Sprite ROM read interface (1-cycle read latency)
-    output logic [9:0]  sprite_rd_addr,
-    input  logic [7:0]  sprite_rd_pixel,
+    // Sun count for HUD (each block = 100 sun, up to 10 blocks)
+    input  logic [13:0] sun_value,
+
+    // Plant sprite ROM read interface (1-cycle read latency)
+    output logic [11:0] plant_rd_addr,
+    input  logic [7:0]  plant_rd_pixel,
+
+    // Zombie sprite ROM read interface (1-cycle read latency)
+    output logic [11:0] zombie_rd_addr,
+    input  logic [7:0]  zombie_rd_pixel,
 
     // Final pixel color (registered, 1 cycle of latency vs px/py)
     output logic [7:0]  color_out
@@ -67,7 +75,6 @@ module entity_drawer(
     // Color indices (must match color_palette.sv)
     // ---------------------------------------------------------------
     localparam logic [7:0] COL_YELLOW       = 8'd4;
-    localparam logic [7:0] COL_RED          = 8'd5;
     localparam logic [7:0] COL_BRIGHT_GREEN = 8'd9;
     localparam logic [7:0] COL_TRANSPARENT  = 8'hFF;
 
@@ -75,14 +82,20 @@ module entity_drawer(
     localparam logic [9:0] GRID_X     = 10'd64;
     localparam logic [9:0] GRID_Y     = 10'd112;
     localparam logic [9:0] CELL       = 10'd64;
-    localparam int         GRID_COLS  = 8;
-    localparam int         GRID_ROWS  = 4;
 
     // Entity sprite sizes
-    localparam logic [9:0] ZOMBIE_W = 10'd32;
+    localparam logic [9:0] ZOMBIE_W = 10'd64;
     localparam logic [9:0] ZOMBIE_H = 10'd64;
     localparam logic [9:0] PEA_SIZE = 10'd8;
     localparam logic [9:0] CURSOR_BORDER = 10'd4;
+
+    // Sun HUD layout: 10 blocks across the top of the screen
+    localparam logic [9:0]  SUN_X     = 10'd440;
+    localparam logic [9:0]  SUN_Y     = 10'd24;
+    localparam logic [9:0]  SUN_BW    = 10'd16;  // block width
+    localparam logic [9:0]  SUN_BH    = 10'd24;  // block height
+    localparam logic [9:0]  SUN_PITCH = 10'd18;  // block + 2 px gap
+    localparam logic [13:0] SUN_PER_BLOCK = 14'd50;
 
     // ---------------------------------------------------------------
     // Unpack the zombie/pea arrays into indexable arrays
@@ -104,52 +117,62 @@ module entity_drawer(
 
     // ---------------------------------------------------------------
     // Stage 1: figure out which grid cell the current pixel is in,
-    // and issue the sprite ROM read for that cell.
+    // and issue the plant sprite ROM read for that cell.
     // ---------------------------------------------------------------
     wire in_grid_x = (px >= GRID_X) && (px < GRID_X + 10'd512);
     wire in_grid_y = (py >= GRID_Y) && (py < GRID_Y + 10'd256);
     wire in_grid   = in_grid_x && in_grid_y;
 
-    // Coordinates within the grid (high bit unused inside grid)
     /* verilator lint_off UNUSED */
     wire [9:0] gx = px - GRID_X;
     wire [9:0] gy = py - GRID_Y;
     /* verilator lint_on UNUSED */
 
-    // Cell index and within-cell pixel (cells are 64 px = 2^6).  The
-    // sprite ROM only uses the upper 5 bits of in_cell_{x,y} because we
-    // 2x-downscale a 32x32 source into a 64x64 cell.
+    // Cell index and within-cell pixel (cells are 64 px = 2^6).  Sprite
+    // is 64x64 so we use the full 6 bits of in_cell_{x,y} as the address.
     wire [2:0] cell_col  = gx[8:6];
     wire [1:0] cell_row  = gy[7:6];
-    /* verilator lint_off UNUSED */
     wire [5:0] in_cell_x = gx[5:0];
     wire [5:0] in_cell_y = gy[5:0];
-    /* verilator lint_on UNUSED */
 
     // Plant bit for this cell (false if outside grid)
     wire [4:0] plant_idx = {cell_row, cell_col};
     wire plant_here = in_grid && plant_present[plant_idx];
 
-    // Sprite ROM address: 2x downscale (32x32 ROM -> 64x64 cell).
-    // Each ROM row repeats for 2 screen rows; same for columns.
-    assign sprite_rd_addr = {in_cell_y[5:1], in_cell_x[5:1]};
+    // Plant sprite ROM address: 1:1 mapping (64x64 ROM into 64x64 cell).
+    assign plant_rd_addr = {in_cell_y, in_cell_x};
+
+    // ---------------------------------------------------------------
+    // Stage 1: zombie hit detection AND zombie sprite ROM address.
+    // Priority encoder: first alive zombie covering this pixel wins
+    // (zombies don't normally overlap on screen).
+    // ---------------------------------------------------------------
+    logic        zombie_hit_comb;
+    logic [5:0]  zombie_in_x, zombie_in_y;
+    always_comb begin
+        zombie_hit_comb = 1'b0;
+        zombie_in_x     = 6'd0;
+        zombie_in_y     = 6'd0;
+        for (int i = 0; i < 8; i++) begin
+            logic [9:0] zy_top, dx, dy;
+            zy_top = GRID_Y + ({8'd0, zombie_row[i]} << 6);
+            dx     = px - zombie_x[i];
+            dy     = py - zy_top;
+            if (zombie_alive[i] && !zombie_hit_comb &&
+                px >= zombie_x[i] && px < zombie_x[i] + ZOMBIE_W &&
+                py >= zy_top      && py < zy_top      + ZOMBIE_H)
+            begin
+                zombie_hit_comb = 1'b1;
+                zombie_in_x     = dx[5:0];
+                zombie_in_y     = dy[5:0];
+            end
+        end
+    end
+    assign zombie_rd_addr = {zombie_in_y, zombie_in_x};
 
     // ---------------------------------------------------------------
     // Stage 1: combinational hit detection for non-sprite entities
     // ---------------------------------------------------------------
-    logic zombie_hit_comb;
-    always_comb begin
-        zombie_hit_comb = 1'b0;
-        for (int i = 0; i < 8; i++) begin
-            logic [9:0] zy_top;
-            zy_top = GRID_Y + ({8'd0, zombie_row[i]} << 6);  // row * 64
-            if (zombie_alive[i] &&
-                px >= zombie_x[i] && px < zombie_x[i] + ZOMBIE_W &&
-                py >= zy_top && py < zy_top + ZOMBIE_H)
-                zombie_hit_comb = 1'b1;
-        end
-    end
-
     logic pea_hit_comb;
     always_comb begin
         pea_hit_comb = 1'b0;
@@ -183,6 +206,22 @@ module entity_drawer(
         end
     end
 
+    // Sun HUD: 10 yellow blocks across the top.  Block i is lit when
+    // sun_value >= (i+1)*100.  Loop is unrolled at synthesis.
+    logic sun_hit_comb;
+    always_comb begin
+        sun_hit_comb = 1'b0;
+        if (py >= SUN_Y && py < SUN_Y + SUN_BH) begin
+            for (int i = 0; i < 10; i++) begin
+                logic [9:0] bx;
+                bx = SUN_X + 10'(i) * SUN_PITCH;
+                if (sun_value >= 14'((i+1) * 50) &&
+                    px >= bx && px < bx + SUN_BW)
+                    sun_hit_comb = 1'b1;
+            end
+        end
+    end
+
     // ---------------------------------------------------------------
     // Stage 2: register everything to align with the 1-cycle sprite
     // ROM read latency.  Then mux to produce final color.
@@ -192,6 +231,7 @@ module entity_drawer(
     logic       zombie_hit_d;
     logic       pea_hit_d;
     logic       cursor_hit_d;
+    logic       sun_hit_d;
 
     always_ff @(posedge clk or posedge reset) begin
         if (reset) begin
@@ -200,28 +240,31 @@ module entity_drawer(
             zombie_hit_d <= 1'b0;
             pea_hit_d    <= 1'b0;
             cursor_hit_d <= 1'b0;
+            sun_hit_d    <= 1'b0;
         end else begin
             bg_color_d   <= bg_color;
             plant_here_d <= plant_here;
             zombie_hit_d <= zombie_hit_comb;
             pea_hit_d    <= pea_hit_comb;
             cursor_hit_d <= cursor_hit_comb;
+            sun_hit_d    <= sun_hit_comb;
         end
     end
 
-    // Final mux: paint layers from bottom to top.  sprite_rd_pixel is
+    // Final mux: paint layers from bottom to top.  Sprite pixels are
     // valid this cycle (issued from address registered last cycle by
-    // the sprite ROM, which has 1-cycle latency).  Total pipeline:
-    // 1 clock from (px, py) to color_out.
+    // the sprite ROM, which has 1-cycle latency).
     always_comb begin
         color_out = bg_color_d;
-        if (plant_here_d && sprite_rd_pixel != COL_TRANSPARENT)
-            color_out = sprite_rd_pixel;
+        if (plant_here_d && plant_rd_pixel != COL_TRANSPARENT)
+            color_out = plant_rd_pixel;
         if (pea_hit_d)
             color_out = COL_BRIGHT_GREEN;
-        if (zombie_hit_d)
-            color_out = COL_RED;
+        if (zombie_hit_d && zombie_rd_pixel != COL_TRANSPARENT)
+            color_out = zombie_rd_pixel;
         if (cursor_hit_d)
+            color_out = COL_YELLOW;
+        if (sun_hit_d)
             color_out = COL_YELLOW;
     end
 
