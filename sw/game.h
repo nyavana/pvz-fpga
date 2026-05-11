@@ -16,6 +16,7 @@
 
 /* Plant constants */
 #define PLANT_COST          50
+#define SUNFLOWER_COST      50
 #define PLANT_FIRE_COOLDOWN 120  /* frames (2 seconds at 60fps) */
 #define PLANT_HP            3    /* hits before a plant is destroyed */
 
@@ -49,6 +50,7 @@
 /* Plant types */
 #define PLANT_NONE        0
 #define PLANT_PEASHOOTER  1
+#define PLANT_SUNFLOWER   2
 
 typedef struct {
     int type;           /* PLANT_NONE or PLANT_PEASHOOTER */
@@ -79,6 +81,8 @@ typedef struct {
 
     int cursor_row;
     int cursor_col;
+
+    int selected_plant_type;  /* PLANT_PEASHOOTER or PLANT_SUNFLOWER */
 
     int sun;
     int sun_timer;

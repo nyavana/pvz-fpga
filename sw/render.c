@@ -31,15 +31,25 @@ int render_init(int fpga_fd)
 
 static void render_plants(const game_state_t *gs)
 {
-    uint32_t bits = 0;
+    uint32_t pea_bits = 0;
+    uint32_t sun_bits = 0;
     for (int r = 0; r < GRID_ROWS; r++) {
         for (int c = 0; c < GRID_COLS; c++) {
-	    if(gs->grid[r][c].type == PLANT_PEASHOOTER){
-		bits |= (1u << (r * 8 + c));
-	    }
+            int t = gs->grid[r][c].type;
+            if (t == PLANT_PEASHOOTER)
+                pea_bits |= (1u << (r * 8 + c));
+            else if (t == PLANT_SUNFLOWER)
+                sun_bits |= (1u << (r * 8 + c));
         }
     }
-    write_reg(PVZ_REG_PLANTS, bits);
+    write_reg(PVZ_REG_PLANTS,    pea_bits);
+    write_reg(PVZ_REG_SUNFLOWER, sun_bits);
+}
+
+static void render_selected(const game_state_t *gs)
+{
+    int sel = (gs->selected_plant_type == PLANT_SUNFLOWER) ? 1 : 0;
+    write_reg(PVZ_REG_SELECTED, sel);
 }
 
 static void render_zombies(const game_state_t *gs)
@@ -86,8 +96,8 @@ static void render_sun(const game_state_t *gs)
 
 static void hide_all_entities(void)
 {
-    for (int i = 0; i < PVZ_GRID_ROWS * PVZ_GRID_COLS; i++)
-        write_reg(i, 0);
+    write_reg(PVZ_REG_PLANTS,    0);
+    write_reg(PVZ_REG_SUNFLOWER, 0);
     for (int i = 0; i < PVZ_MAX_ZOMBIES; i++)
         write_reg(PVZ_REG_ZOMBIE(i), 0);
     for (int i = 0; i < PVZ_MAX_PEAS; i++)
@@ -103,10 +113,12 @@ void render_frame(const game_state_t *gs)
         render_peas(gs);
         render_cursor(gs);
         render_sun(gs);
+        render_selected(gs);
     } else {
         /* WIN / LOSE: clear everything; main loop prints a banner and
          * exits.  A future HUD pass can render a result indicator. */
         hide_all_entities();
         render_sun(gs);
+        render_selected(gs);
     }
 }

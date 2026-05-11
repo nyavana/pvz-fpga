@@ -6,8 +6,9 @@
  * via Avalon.
  *
  * Register map (32-bit words, byte offset = 4 * word index):
- *   word  0..31  PVZ_PLANT[i]   bit 0 = peashooter present at cell i
+ *   word  0       PVZ_PLANTS    32 bits, bit i = peashooter at cell i
  *                                (i = row*8 + col, row in 0..3, col in 0..7)
+ *   word  1       PVZ_SUNFLOWER 32 bits, bit i = sunflower at cell i
  *   word 32..39  PVZ_ZOMBIE[i]  bit 31 = alive
  *                                bits [9:0]   = x_pixel (0..639)
  *                                bits [11:10] = row (0..3)
@@ -15,7 +16,8 @@
  *   word 48      PVZ_CURSOR     bit 31 = visible
  *                                bits [4:2] = col (0..7)
  *                                bits [1:0] = row (0..3)
- *   word 49      PVZ_SUN        bits [13:0] = sun value (reserved)
+ *   word 49      PVZ_SUN        bits [13:0] = sun value
+ *   word 50      PVZ_SELECTED   bits [1:0]  = selected plant (0=pea, 1=sunflower)
  *
  * Avalon notes:
  *   - The address port is in WORDS (qsys addressUnits = WORDS) so a
@@ -68,6 +70,10 @@ module pvz_top(
     // ---------------------------------------------------------------
     // Plants: one bit per grid cell (32 cells)
     logic [31:0] plant_present;
+    logic [31:0] sunflower_present;
+
+    // Currently selected plant type for the top HUD box (0=pea, 1=sunflower)
+    logic [1:0]  selected_plant;
 
     // Zombies and peas: 8 each.  Alive bits packed; x and row also
     // packed into wide buses for handing to entity_drawer.
@@ -88,7 +94,9 @@ module pvz_top(
     // ---------------------------------------------------------------
     always_ff @(posedge clk or posedge reset) begin
         if (reset) begin
-            plant_present  <= 32'd0;
+            plant_present     <= 32'd0;
+            sunflower_present <= 32'd0;
+            selected_plant    <= 2'd0;
             zombie_alive   <= 8'd0;
             pea_alive      <= 8'd0;
             cursor_visible <= 1'b0;
@@ -102,9 +110,13 @@ module pvz_top(
                 pea_row[i]    <= 2'd0;
             end
         end else if (chipselect && write) begin
-            // Plant cells: word 0..31  -> plant_present[address[4:0]]
+            // Peashooter bitmap: word 0
             if (address == 6'd0) begin
                 plant_present <= writedata;
+            end
+            // Sunflower bitmap: word 1
+            else if (address == 6'd1) begin
+                sunflower_present <= writedata;
             end
             // Zombies: word 32..39
             else if (address < 6'd40) begin
@@ -127,6 +139,10 @@ module pvz_top(
             // Sun: word 49
             else if (address == 6'd49) begin
                 sun_value <= writedata[13:0];
+            end
+            // Selected plant: word 50
+            else if (address == 6'd50) begin
+                selected_plant <= writedata[1:0];
             end
         end
     end
@@ -166,6 +182,14 @@ module pvz_top(
         .pixel(plant_pixel)
     );
 
+    // Sunflower ROM shares the cell-local address with the peashooter ROM
+    logic [7:0]  sunflower_pixel;
+    sprite_rom #(.MEM_FILE("sunflower_idx.mem")) sunflower_rom_inst(
+        .clk  (clk),
+        .addr (plant_addr),
+        .pixel(sunflower_pixel)
+    );
+
     logic [11:0] zombie_addr;
     logic [7:0]  zombie_pixel;
     sprite_rom #(.MEM_FILE("zombie_idx.mem")) zombie_rom_inst(
@@ -185,6 +209,8 @@ module pvz_top(
         .py              (py),
         .bg_color        (bg_color),
         .plant_present   (plant_present),
+        .sunflower_present(sunflower_present),
+        .selected_plant  (selected_plant),
         .zombie_alive    (zombie_alive),
         .zombie_x_packed (zombie_x_packed),
         .zombie_row_packed(zombie_row_packed),
@@ -197,6 +223,7 @@ module pvz_top(
         .sun_value       (sun_value),
         .plant_rd_addr   (plant_addr),
         .plant_rd_pixel  (plant_pixel),
+        .sunflower_rd_pixel(sunflower_pixel),
         .zombie_rd_addr  (zombie_addr),
         .zombie_rd_pixel (zombie_pixel),
         .color_out       (pixel_color)

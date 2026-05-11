@@ -37,6 +37,10 @@ module entity_drawer(
     // ---------- Entity registers (driven by pvz_top register file) ----------
     // Plants: one bit per grid cell, bit (row*8+col).
     input  logic [31:0] plant_present,
+    input  logic [31:0] sunflower_present,
+
+    // Currently selected plant for the top HUD box (0=pea, 1=sunflower)
+    input  logic [1:0]  selected_plant,
 
     // Up to 8 zombies / 8 peas. Packed so we don't need unpacked-array
     // ports (more portable across synthesis tools).
@@ -59,9 +63,11 @@ module entity_drawer(
     // Sun count for HUD (each block = 100 sun, up to 10 blocks)
     input  logic [13:0] sun_value,
 
-    // Plant sprite ROM read interface (1-cycle read latency)
+    // Plant sprite ROM read interface (1-cycle read latency).
+    // Sunflower ROM shares the same address (issued via plant_rd_addr).
     output logic [11:0] plant_rd_addr,
     input  logic [7:0]  plant_rd_pixel,
+    input  logic [7:0]  sunflower_rd_pixel,
 
     // Zombie sprite ROM read interface (1-cycle read latency)
     output logic [11:0] zombie_rd_addr,
@@ -75,7 +81,9 @@ module entity_drawer(
     // Color indices (must match color_palette.sv)
     // ---------------------------------------------------------------
     localparam logic [7:0] COL_YELLOW       = 8'd4;
+    localparam logic [7:0] COL_GREEN        = 8'd7;
     localparam logic [7:0] COL_BRIGHT_GREEN = 8'd9;
+    localparam logic [7:0] COL_ORANGE       = 8'd12;
     localparam logic [7:0] COL_TRANSPARENT  = 8'hFF;
 
     // Layout constants (mirror bg_grid.sv)
@@ -96,6 +104,11 @@ module entity_drawer(
     localparam logic [9:0]  SUN_BH    = 10'd24;  // block height
     localparam logic [9:0]  SUN_PITCH = 10'd18;  // block + 2 px gap
     localparam logic [13:0] SUN_PER_BLOCK = 14'd50;
+
+    // Plant-selector HUD: one 32x32 box at top-left, color shows selection
+    localparam logic [9:0] SEL_X  = 10'd8;
+    localparam logic [9:0] SEL_Y  = 10'd8;
+    localparam logic [9:0] SEL_SZ = 10'd32;
 
     // ---------------------------------------------------------------
     // Unpack the zombie/pea arrays into indexable arrays
@@ -135,9 +148,10 @@ module entity_drawer(
     wire [5:0] in_cell_x = gx[5:0];
     wire [5:0] in_cell_y = gy[5:0];
 
-    // Plant bit for this cell (false if outside grid)
+    // Plant / sunflower bits for this cell (false if outside grid)
     wire [4:0] plant_idx = {cell_row, cell_col};
-    wire plant_here = in_grid && plant_present[plant_idx];
+    wire plant_here     = in_grid && plant_present[plant_idx];
+    wire sunflower_here = in_grid && sunflower_present[plant_idx];
 
     // Plant sprite ROM address: 1:1 mapping (64x64 ROM into 64x64 cell).
     assign plant_rd_addr = {in_cell_y, in_cell_x};
@@ -206,6 +220,14 @@ module entity_drawer(
         end
     end
 
+    // Plant selector HUD: a single 32x32 box at top-left, color depends
+    // on which plant is currently selected (green=pea, orange=sunflower).
+    logic sel_hit_comb;
+    always_comb begin
+        sel_hit_comb = (px >= SEL_X && px < SEL_X + SEL_SZ &&
+                        py >= SEL_Y && py < SEL_Y + SEL_SZ);
+    end
+
     // Sun HUD: 10 yellow blocks across the top.  Block i is lit when
     // sun_value >= (i+1)*100.  Loop is unrolled at synthesis.
     logic sun_hit_comb;
@@ -228,26 +250,35 @@ module entity_drawer(
     // ---------------------------------------------------------------
     logic [7:0] bg_color_d;
     logic       plant_here_d;
+    logic       sunflower_here_d;
     logic       zombie_hit_d;
     logic       pea_hit_d;
     logic       cursor_hit_d;
     logic       sun_hit_d;
+    logic       sel_hit_d;
+    logic [1:0] selected_plant_d;
 
     always_ff @(posedge clk or posedge reset) begin
         if (reset) begin
-            bg_color_d   <= 8'd0;
-            plant_here_d <= 1'b0;
-            zombie_hit_d <= 1'b0;
-            pea_hit_d    <= 1'b0;
-            cursor_hit_d <= 1'b0;
-            sun_hit_d    <= 1'b0;
+            bg_color_d       <= 8'd0;
+            plant_here_d     <= 1'b0;
+            sunflower_here_d <= 1'b0;
+            zombie_hit_d     <= 1'b0;
+            pea_hit_d        <= 1'b0;
+            cursor_hit_d     <= 1'b0;
+            sun_hit_d        <= 1'b0;
+            sel_hit_d        <= 1'b0;
+            selected_plant_d <= 2'd0;
         end else begin
-            bg_color_d   <= bg_color;
-            plant_here_d <= plant_here;
-            zombie_hit_d <= zombie_hit_comb;
-            pea_hit_d    <= pea_hit_comb;
-            cursor_hit_d <= cursor_hit_comb;
-            sun_hit_d    <= sun_hit_comb;
+            bg_color_d       <= bg_color;
+            plant_here_d     <= plant_here;
+            sunflower_here_d <= sunflower_here;
+            zombie_hit_d     <= zombie_hit_comb;
+            pea_hit_d        <= pea_hit_comb;
+            cursor_hit_d     <= cursor_hit_comb;
+            sun_hit_d        <= sun_hit_comb;
+            sel_hit_d        <= sel_hit_comb;
+            selected_plant_d <= selected_plant;
         end
     end
 
@@ -258,6 +289,8 @@ module entity_drawer(
         color_out = bg_color_d;
         if (plant_here_d && plant_rd_pixel != COL_TRANSPARENT)
             color_out = plant_rd_pixel;
+        if (sunflower_here_d && sunflower_rd_pixel != COL_TRANSPARENT)
+            color_out = sunflower_rd_pixel;
         if (pea_hit_d)
             color_out = COL_BRIGHT_GREEN;
         if (zombie_hit_d && zombie_rd_pixel != COL_TRANSPARENT)
@@ -266,6 +299,8 @@ module entity_drawer(
             color_out = COL_YELLOW;
         if (sun_hit_d)
             color_out = COL_YELLOW;
+        if (sel_hit_d)
+            color_out = (selected_plant_d == 2'd1) ? COL_ORANGE : COL_GREEN;
     end
 
 endmodule

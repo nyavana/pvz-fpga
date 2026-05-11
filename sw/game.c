@@ -25,6 +25,7 @@ void game_init(game_state_t *gs)
     gs->state = STATE_PLAYING;
     gs->cursor_row = 0;
     gs->cursor_col = 0;
+    gs->selected_plant_type = PLANT_PEASHOOTER;
     gs->zombies_spawned = 0;
     gs->spawn_timer = random_range(ZOMBIE_SPAWN_MIN, ZOMBIE_SPAWN_MAX);
     gs->frame_count = 0;
@@ -34,16 +35,18 @@ int game_place_plant(game_state_t *gs)
 {
     int r = gs->cursor_row;
     int c = gs->cursor_col;
+    int type = gs->selected_plant_type;
+    int cost = (type == PLANT_SUNFLOWER) ? SUNFLOWER_COST : PLANT_COST;
 
     if (gs->grid[r][c].type != PLANT_NONE)
         return 0;
-    if (gs->sun < PLANT_COST)
+    if (gs->sun < cost)
         return 0;
 
-    gs->grid[r][c].type = PLANT_PEASHOOTER;
+    gs->grid[r][c].type = type;
     gs->grid[r][c].fire_cooldown = PLANT_FIRE_COOLDOWN;
     gs->grid[r][c].hp = PLANT_HP;
-    gs->sun -= PLANT_COST;
+    gs->sun -= cost;
     return 1;
 }
 
@@ -247,12 +250,23 @@ static void update_spawning(game_state_t *gs)
     }
 }
 
-/* Update sun economy */
+/* Count sunflowers currently on the field */
+static int count_sunflowers(const game_state_t *gs)
+{
+    int n = 0;
+    for (int r = 0; r < GRID_ROWS; r++)
+        for (int c = 0; c < GRID_COLS; c++)
+            if (gs->grid[r][c].type == PLANT_SUNFLOWER)
+                n++;
+    return n;
+}
+
+/* Update sun economy.  Base rate plus one extra increment per sunflower. */
 static void update_sun(game_state_t *gs)
 {
     gs->sun_timer--;
     if (gs->sun_timer <= 0) {
-        gs->sun += SUN_INCREMENT;
+        gs->sun += SUN_INCREMENT * (1 + count_sunflowers(gs));
         gs->sun_timer = SUN_INTERVAL;
     }
 }

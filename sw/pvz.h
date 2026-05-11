@@ -10,7 +10,8 @@
  * Software writes one word at a time using the PVZ_WRITE_REG ioctl.
  *
  * Register map (word index -> meaning):
- *    0..31   PLANT[row*8 + col]   bit 0 = peashooter present
+ *    0       PLANTS               32 bits, bit i = peashooter at cell i
+ *    1       SUNFLOWERS           32 bits, bit i = sunflower at cell i
  *   32..39   ZOMBIE[i]            bit 31 = alive
  *                                 bits [9:0]   = x_pixel (0..639)
  *                                 bits [11:10] = row (0..3)
@@ -18,7 +19,8 @@
  *   48       CURSOR               bit 31 = visible
  *                                 bits [4:2] = col (0..7)
  *                                 bits [1:0] = row (0..3)
- *   49       SUN                  bits [13:0] = sun count (reserved)
+ *   49       SUN                  bits [13:0] = sun count
+ *   50       SELECTED             bits [1:0]  = selected plant (0=pea, 1=sunflower)
  *
  * Layout constants must match hw/bg_grid.sv and hw/entity_drawer.sv.
  */
@@ -37,12 +39,14 @@
 #define PVZ_MAX_PEAS     8
 
 /* Word indices in the register file */
-#define PVZ_REG_PLANTS           0                     /* 0..31 */
+#define PVZ_REG_PLANTS           0                     /* peashooter bitmap */
+#define PVZ_REG_SUNFLOWER        1                     /* sunflower bitmap */
 #define PVZ_REG_ZOMBIE(idx)      (32 + (idx))          /* 32..39 */
 #define PVZ_REG_PEA(idx)         (40 + (idx))          /* 40..47 */
 #define PVZ_REG_CURSOR           48
 #define PVZ_REG_SUN              49
-#define PVZ_NUM_REGS             50
+#define PVZ_REG_SELECTED         50
+#define PVZ_NUM_REGS             51
 
 /* Pack a zombie/pea word: alive in bit 31, row in [11:10], x in [9:0] */
 static inline unsigned int pvz_pack_entity(int alive, int row, int x_pixel)
