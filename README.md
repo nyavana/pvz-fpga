@@ -133,7 +133,7 @@ You must run `rmmod pvz_driver` before rebuilding the kernel module.
    ```
    ./pvz
    ```
-   Controls: arrow keys move the cursor, Space places a Peashooter (costs 50 sun), D removes a plant, ESC quits.
+   Controls: arrow keys move the cursor, Space places the currently selected plant, D removes a plant, ESC quits. Two plant icons at the top-left of the screen show the available plants — the yellow outline marks the chosen one. TAB cycles the outline between Peashooter (green icon, 50 sun) and Sunflower (orange icon, 50 sun).
 
 ### Testing
 
