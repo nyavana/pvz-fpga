@@ -6,49 +6,71 @@
 /*
  * Shared header for PvZ GPU kernel driver and userspace programs.
  *
- * Register byte offsets (from driver base):
- *   0x00  BG_CELL      - background grid cell color
- *   0x04  SHAPE_ADDR   - shape table entry select
- *   0x08  SHAPE_DATA0  - shape type/visible/x/y
- *   0x0C  SHAPE_DATA1  - shape w/h/color
- *   0x10  SHAPE_COMMIT - commit shape entry
+ * The hardware exposes a flat 32-bit register file via Avalon-MM.
+ * Software writes one word at a time using the PVZ_WRITE_REG ioctl.
+ *
+ * Register map (word index -> meaning):
+ *    0       PLANTS               32 bits, bit i = peashooter at cell i
+ *    1       SUNFLOWERS           32 bits, bit i = sunflower at cell i
+ *   32..39   ZOMBIE[i]            bit 31 = alive
+ *                                 bits [9:0]   = x_pixel (0..639)
+ *                                 bits [11:10] = row (0..3)
+ *   40..47   PEA[i]               same encoding as ZOMBIE
+ *   48       CURSOR               bit 31 = visible
+ *                                 bits [4:2] = col (0..7)
+ *                                 bits [1:0] = row (0..3)
+ *   49       SUN                  bits [13:0] = sun count
+ *   50       SELECTED             bits [1:0]  = selected plant (0=pea, 1=sunflower)
+ *
+ * Layout constants must match hw/bg_grid.sv and hw/entity_drawer.sv.
  */
 
-/* Avalon register byte offsets */
-#define PVZ_BG_CELL       0x00
-#define PVZ_SHAPE_ADDR    0x04
-#define PVZ_SHAPE_DATA0   0x08
-#define PVZ_SHAPE_DATA1   0x0C
-#define PVZ_SHAPE_COMMIT  0x10
+/* Grid + screen layout */
+#define PVZ_GRID_ROWS    4
+#define PVZ_GRID_COLS    8
+#define PVZ_CELL_SIZE    64
+#define PVZ_GRID_X       64
+#define PVZ_GRID_Y       112
+#define PVZ_SCREEN_W     640
+#define PVZ_SCREEN_H     480
 
-/* Shape types */
-#define SHAPE_RECT    0
-#define SHAPE_CIRCLE  1
-#define SHAPE_DIGIT   2
-#define SHAPE_SPRITE  3  /* 32x32 sprite ROM, rendered at 2x -> 64x64 on screen */
+/* Per-entity capacity exposed by hardware */
+#define PVZ_MAX_ZOMBIES  8
+#define PVZ_MAX_PEAS     8
 
-/* Background cell write argument */
+/* Word indices in the register file */
+#define PVZ_REG_PLANTS           0                     /* peashooter bitmap */
+#define PVZ_REG_SUNFLOWER        1                     /* sunflower bitmap */
+#define PVZ_REG_ZOMBIE(idx)      (32 + (idx))          /* 32..39 */
+#define PVZ_REG_PEA(idx)         (40 + (idx))          /* 40..47 */
+#define PVZ_REG_CURSOR           48
+#define PVZ_REG_SUN              49
+#define PVZ_REG_SELECTED         50
+#define PVZ_NUM_REGS             51
+
+/* Pack a zombie/pea word: alive in bit 31, row in [11:10], x in [9:0] */
+static inline unsigned int pvz_pack_entity(int alive, int row, int x_pixel)
+{
+    return ((unsigned)(alive & 1) << 31) |
+           ((unsigned)(row   & 3) << 10) |
+           ((unsigned)(x_pixel & 0x3FF));
+}
+
+/* Pack a cursor word: visible in bit 31, col in [4:2], row in [1:0] */
+static inline unsigned int pvz_pack_cursor(int visible, int row, int col)
+{
+    return ((unsigned)(visible & 1) << 31) |
+           ((unsigned)(col     & 7) << 2)  |
+           ((unsigned)(row     & 3));
+}
+
+/* ioctl argument: write `value` to register `word_index` */
 typedef struct {
-    unsigned char row;    /* 0-3 */
-    unsigned char col;    /* 0-7 */
-    unsigned char color;  /* palette index 0-255 */
-} pvz_bg_arg_t;
-
-/* Shape write argument */
-typedef struct {
-    unsigned char index;   /* shape table index 0-47 */
-    unsigned char type;    /* SHAPE_RECT, SHAPE_CIRCLE, SHAPE_DIGIT */
-    unsigned char visible; /* 1=visible, 0=hidden */
-    unsigned short x;      /* x position 0-639 */
-    unsigned short y;      /* y position 0-479 */
-    unsigned short w;      /* width (or digit value in low 4 bits for SHAPE_DIGIT) */
-    unsigned short h;      /* height */
-    unsigned char color;   /* palette color index */
-} pvz_shape_arg_t;
+    unsigned int word_index;   /* 0..PVZ_NUM_REGS-1 */
+    unsigned int value;
+} pvz_write_arg_t;
 
 #define PVZ_MAGIC 'p'
-#define PVZ_WRITE_BG       _IOW(PVZ_MAGIC, 1, pvz_bg_arg_t)
-#define PVZ_WRITE_SHAPE    _IOW(PVZ_MAGIC, 2, pvz_shape_arg_t)
-#define PVZ_COMMIT_SHAPES  _IO(PVZ_MAGIC, 3)
+#define PVZ_WRITE_REG  _IOW(PVZ_MAGIC, 1, pvz_write_arg_t)
 
 #endif /* _PVZ_H */

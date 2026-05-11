@@ -10,6 +10,8 @@
 #define INPUT_SPACE  5
 #define INPUT_D      6
 #define INPUT_ESC    7
+#define INPUT_Q      8
+#define INPUT_W      9
 
 /*
  * Initialize keyboard input from a Linux input device.

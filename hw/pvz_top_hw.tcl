@@ -29,13 +29,12 @@ add_fileset QUARTUS_SYNTH QUARTUS_SYNTH "" ""
 set_fileset_property QUARTUS_SYNTH TOP_LEVEL pvz_top
 add_fileset_file pvz_top.sv SYSTEM_VERILOG PATH pvz_top.sv TOP_LEVEL_FILE
 add_fileset_file vga_counters.sv SYSTEM_VERILOG PATH vga_counters.sv
-add_fileset_file linebuffer.sv SYSTEM_VERILOG PATH linebuffer.sv
 add_fileset_file bg_grid.sv SYSTEM_VERILOG PATH bg_grid.sv
-add_fileset_file shape_table.sv SYSTEM_VERILOG PATH shape_table.sv
-add_fileset_file shape_renderer.sv SYSTEM_VERILOG PATH shape_renderer.sv
+add_fileset_file entity_drawer.sv SYSTEM_VERILOG PATH entity_drawer.sv
 add_fileset_file color_palette.sv SYSTEM_VERILOG PATH color_palette.sv
 add_fileset_file sprite_rom.sv SYSTEM_VERILOG PATH sprite_rom.sv
-add_fileset_file peas_idx.mem OTHER PATH peas_idx.mem
+add_fileset_file peashooter_idx.mem OTHER PATH peashooter_idx.mem
+add_fileset_file zombie_idx.mem OTHER PATH zombie_idx.mem
 
 # Clock interface
 add_interface clock clock end
@@ -67,7 +66,7 @@ set_interface_property s1 setupTime 0
 set_interface_property s1 timingUnits Cycles
 set_interface_property s1 writeWaitTime 0
 
-add_interface_port s1 address address Input 3
+add_interface_port s1 address address Input 6
 add_interface_port s1 writedata writedata Input 32
 add_interface_port s1 write write Input 1
 add_interface_port s1 chipselect chipselect Input 1

@@ -1,9 +1,10 @@
 /*
  * PvZ GPU kernel driver
  *
- * Misc device at /dev/pvz with ioctls for background cell writes,
- * shape entry writes, and shape commit. Follows the lab3 vga_ball.c
- * driver pattern.
+ * Misc device at /dev/pvz with a single ioctl, PVZ_WRITE_REG, that
+ * writes one 32-bit value into the FPGA register file.  Avalon
+ * addressing is in WORDS (set in pvz_top_hw.tcl) so the byte offset
+ * is `word_index * 4`.
  *
  * Compatible: csee4840,pvz_gpu-1.0
  */
@@ -26,59 +27,17 @@
 
 static struct pvz_dev dev;
 
-/*
- * Write a background cell color to the FPGA.
- * BG_CELL register layout: [2:0]=col, [4:3]=row, [12:8]=color
- */
-static void write_bg_cell(pvz_bg_arg_t *bg)
-{
-    u32 val = (bg->col & 0x7) |
-              ((bg->row & 0x3) << 3) |
-              ((bg->color & 0xFF) << 8);
-    iowrite32(val, dev.virtbase + PVZ_BG_CELL);
-}
-
-/*
- * Write a shape entry to the FPGA.
- * Sequence: SHAPE_ADDR, SHAPE_DATA0, SHAPE_DATA1, SHAPE_COMMIT
- */
-static void write_shape(pvz_shape_arg_t *s)
-{
-    u32 addr_val = s->index & 0x3F;
-    u32 data0 = (s->type & 0x3) |
-                ((s->visible & 0x1) << 2) |
-                ((s->x & 0x3FF) << 3) |
-                ((s->y & 0x1FF) << 13);
-    u32 data1 = (s->w & 0x1FF) |
-                ((s->h & 0x1FF) << 9) |
-                ((s->color & 0xFF) << 18);
-
-    iowrite32(addr_val, dev.virtbase + PVZ_SHAPE_ADDR);
-    iowrite32(data0,    dev.virtbase + PVZ_SHAPE_DATA0);
-    iowrite32(data1,    dev.virtbase + PVZ_SHAPE_DATA1);
-    iowrite32(1,        dev.virtbase + PVZ_SHAPE_COMMIT);
-}
-
 static long pvz_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
 {
-    pvz_bg_arg_t bg;
-    pvz_shape_arg_t shape;
+    pvz_write_arg_t w;
 
     switch (cmd) {
-    case PVZ_WRITE_BG:
-        if (copy_from_user(&bg, (pvz_bg_arg_t *)arg, sizeof(bg)))
+    case PVZ_WRITE_REG:
+        if (copy_from_user(&w, (pvz_write_arg_t *)arg, sizeof(w)))
             return -EACCES;
-        write_bg_cell(&bg);
-        break;
-
-    case PVZ_WRITE_SHAPE:
-        if (copy_from_user(&shape, (pvz_shape_arg_t *)arg, sizeof(shape)))
-            return -EACCES;
-        write_shape(&shape);
-        break;
-
-    case PVZ_COMMIT_SHAPES:
-        iowrite32(1, dev.virtbase + PVZ_SHAPE_COMMIT);
+        if (w.word_index >= PVZ_NUM_REGS)
+            return -EINVAL;
+        iowrite32(w.value, dev.virtbase + (w.word_index * 4));
         break;
 
     default:

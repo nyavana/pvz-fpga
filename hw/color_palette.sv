@@ -5,7 +5,7 @@
  *
  * Index  Color         R    G    B    Usage
  * -----  -----------   ---  ---  ---  -----
- *   0    Black         00   00   00   Background / unused
+ *   0    Black         00   00   00   Unused
  *   1    Dark Green    1B   5E   20   Grid cell (dark)
  *   2    Light Green   2D   8B   2D   Grid cell (light)
  *   3    Brown         8B   45   13   Soil / stem
@@ -18,6 +18,7 @@
  *  10    White         FF   FF   FF   HUD digits
  *  11    Gray          80   80   80   HUD background
  *  12    Orange        FF   A5   00   Sun indicator
+ *  13    Sky Blue      87   CE   EB   Background
  */
 
 module color_palette(
@@ -42,6 +43,7 @@ module color_palette(
             8'd10: {r, g, b} = {8'hFF, 8'hFF, 8'hFF}; // White
             8'd11: {r, g, b} = {8'h80, 8'h80, 8'h80}; // Gray
             8'd12: {r, g, b} = {8'hFF, 8'hA5, 8'h00}; // Orange
+            8'd13: {r, g, b} = {8'h87, 8'hCE, 8'hEB}; // Sky Blue
             default: {r, g, b} = {8'h00, 8'h00, 8'h00}; // Black
         endcase
     end

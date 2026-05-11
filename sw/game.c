@@ -25,6 +25,7 @@ void game_init(game_state_t *gs)
     gs->state = STATE_PLAYING;
     gs->cursor_row = 0;
     gs->cursor_col = 0;
+    gs->selected_plant_type = PLANT_PEASHOOTER;
     gs->zombies_spawned = 0;
     gs->spawn_timer = random_range(ZOMBIE_SPAWN_MIN, ZOMBIE_SPAWN_MAX);
     gs->frame_count = 0;
@@ -34,16 +35,18 @@ int game_place_plant(game_state_t *gs)
 {
     int r = gs->cursor_row;
     int c = gs->cursor_col;
+    int type = gs->selected_plant_type;
+    int cost = (type == PLANT_SUNFLOWER) ? SUNFLOWER_COST : PLANT_COST;
 
     if (gs->grid[r][c].type != PLANT_NONE)
         return 0;
-    if (gs->sun < PLANT_COST)
+    if (gs->sun < cost)
         return 0;
 
-    gs->grid[r][c].type = PLANT_PEASHOOTER;
+    gs->grid[r][c].type = type;
     gs->grid[r][c].fire_cooldown = PLANT_FIRE_COOLDOWN;
     gs->grid[r][c].hp = PLANT_HP;
-    gs->sun -= PLANT_COST;
+    gs->sun -= cost;
     return 1;
 }
 
@@ -70,6 +73,16 @@ static int zombie_in_row(game_state_t *gs, int row)
     return 0;
 }
 
+/* Convert a zombie's screen x to a grid column.
+ * Returns -1 if the zombie is not over the lawn. */
+static int zombie_col(int x_pixel)
+{
+    int gx = x_pixel - GAME_AREA_X;
+    if (gx < 0 || gx >= GRID_COLS * CELL_SIZE)
+        return -1;
+    return gx / CELL_SIZE;
+}
+
 /* Spawn a new pea projectile at the given grid cell */
 static void spawn_pea(game_state_t *gs, int row, int col)
 {
@@ -78,7 +91,8 @@ static void spawn_pea(game_state_t *gs, int row, int col)
             gs->projectiles[i].active = 1;
             gs->projectiles[i].row = row;
             /* Start at the right edge of the plant's cell */
-            gs->projectiles[i].x_pixel = (col + 1) * CELL_WIDTH;
+            gs->projectiles[i].x_pixel =
+                GAME_AREA_X + (col + 1) * CELL_SIZE;
             return;
         }
     }
@@ -96,9 +110,8 @@ static void update_zombies(game_state_t *gs)
         if (z->eating) {
             /* Re-check that the plant still exists (another zombie may
              * have destroyed it) */
-            int col = z->x_pixel / CELL_WIDTH;
-            if (col < 0 || col >= GRID_COLS ||
-                gs->grid[z->row][col].type == PLANT_NONE) {
+            int col = zombie_col(z->x_pixel);
+            if (col < 0 || gs->grid[z->row][col].type == PLANT_NONE) {
                 z->eating = 0;
                 z->eat_timer = 0;
                 /* Fall through to movement below */
@@ -126,16 +139,15 @@ static void update_zombies(game_state_t *gs)
             z->move_counter = 0;
             z->x_pixel--;
 
-            /* Lose condition: zombie reached left edge */
-            if (z->x_pixel <= 0) {
+            /* Lose condition: zombie reached the lawn's left edge */
+            if (z->x_pixel <= GAME_AREA_X) {
                 gs->state = STATE_LOSE;
                 return;
             }
 
             /* Check for plant collision after moving */
-            int col = z->x_pixel / CELL_WIDTH;
-            if (col >= 0 && col < GRID_COLS &&
-                gs->grid[z->row][col].type != PLANT_NONE) {
+            int col = zombie_col(z->x_pixel);
+            if (col >= 0 && gs->grid[z->row][col].type != PLANT_NONE) {
                 z->eating = 1;
                 z->eat_timer = ZOMBIE_EAT_COOLDOWN;
             }
@@ -238,12 +250,23 @@ static void update_spawning(game_state_t *gs)
     }
 }
 
-/* Update sun economy */
+/* Count sunflowers currently on the field */
+static int count_sunflowers(const game_state_t *gs)
+{
+    int n = 0;
+    for (int r = 0; r < GRID_ROWS; r++)
+        for (int c = 0; c < GRID_COLS; c++)
+            if (gs->grid[r][c].type == PLANT_SUNFLOWER)
+                n++;
+    return n;
+}
+
+/* Update sun economy.  Base rate plus one extra increment per sunflower. */
 static void update_sun(game_state_t *gs)
 {
     gs->sun_timer--;
     if (gs->sun_timer <= 0) {
-        gs->sun += SUN_INCREMENT;
+        gs->sun += SUN_INCREMENT * (1 + count_sunflowers(gs));
         gs->sun_timer = SUN_INTERVAL;
     }
 }
