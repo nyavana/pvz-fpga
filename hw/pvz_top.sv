@@ -103,8 +103,8 @@ module pvz_top(
             end
         end else if (chipselect && write) begin
             // Plant cells: word 0..31  -> plant_present[address[4:0]]
-            if (address < 6'd32) begin
-                plant_present[address[4:0]] <= writedata[0];
+            if (address == 6'd0) begin
+                plant_present <= writedata;
             end
             // Zombies: word 32..39
             else if (address < 6'd40) begin
