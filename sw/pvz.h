@@ -37,7 +37,7 @@
 #define PVZ_MAX_PEAS     8
 
 /* Word indices in the register file */
-#define PVZ_REG_PLANT(row, col)  ((row) * 8 + (col))   /* 0..31 */
+#define PVZ_REG_PLANTS           0                     /* 0..31 */
 #define PVZ_REG_ZOMBIE(idx)      (32 + (idx))          /* 32..39 */
 #define PVZ_REG_PEA(idx)         (40 + (idx))          /* 40..47 */
 #define PVZ_REG_CURSOR           48

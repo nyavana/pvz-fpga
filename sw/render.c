@@ -10,6 +10,7 @@
  */
 
 #include <stdio.h>
+#include <stdint.h>
 #include <sys/ioctl.h>
 #include "render.h"
 #include "pvz.h"
@@ -30,12 +31,15 @@ int render_init(int fpga_fd)
 
 static void render_plants(const game_state_t *gs)
 {
+    uint32_t bits = 0;
     for (int r = 0; r < GRID_ROWS; r++) {
         for (int c = 0; c < GRID_COLS; c++) {
-            int present = (gs->grid[r][c].type == PLANT_PEASHOOTER) ? 1 : 0;
-            write_reg(PVZ_REG_PLANT(r, c), present);
+	    if(gs->grid[r][c].type == PLANT_PEASHOOTER){
+		bits |= (1u << (r * 8 + c));
+	    }
         }
     }
+    write_reg(PVZ_REG_PLANTS, bits);
 }
 
 static void render_zombies(const game_state_t *gs)
