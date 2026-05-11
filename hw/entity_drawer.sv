@@ -105,10 +105,13 @@ module entity_drawer(
     localparam logic [9:0]  SUN_PITCH = 10'd18;  // block + 2 px gap
     localparam logic [13:0] SUN_PER_BLOCK = 14'd50;
 
-    // Plant-selector HUD: one 32x32 box at top-left, color shows selection
-    localparam logic [9:0] SEL_X  = 10'd8;
-    localparam logic [9:0] SEL_Y  = 10'd8;
-    localparam logic [9:0] SEL_SZ = 10'd32;
+    // Plant-selector HUD: a yellow-bordered box at top-left whose
+    // interior color shows the currently selected plant.  The yellow
+    // border makes it visually obvious that this is a "cursor".
+    localparam logic [9:0] SEL_X      = 10'd8;
+    localparam logic [9:0] SEL_Y      = 10'd8;
+    localparam logic [9:0] SEL_SZ     = 10'd48;
+    localparam logic [9:0] SEL_BORDER = 10'd4;
 
     // ---------------------------------------------------------------
     // Unpack the zombie/pea arrays into indexable arrays
@@ -220,12 +223,23 @@ module entity_drawer(
         end
     end
 
-    // Plant selector HUD: a single 32x32 box at top-left, color depends
-    // on which plant is currently selected (green=pea, orange=sunflower).
+    // Plant selector HUD: yellow-bordered box at top-left whose fill
+    // color indicates the currently selected plant.
+    //   sel_hit_comb    = anywhere inside the box (fill region)
+    //   sel_border_comb = on the box's border (yellow cursor look)
     logic sel_hit_comb;
+    logic sel_border_comb;
     always_comb begin
         sel_hit_comb = (px >= SEL_X && px < SEL_X + SEL_SZ &&
                         py >= SEL_Y && py < SEL_Y + SEL_SZ);
+        sel_border_comb = 1'b0;
+        if (sel_hit_comb) begin
+            if ((px - SEL_X)            < SEL_BORDER ||
+                (SEL_X + SEL_SZ - px)  <= SEL_BORDER ||
+                (py - SEL_Y)            < SEL_BORDER ||
+                (SEL_Y + SEL_SZ - py)  <= SEL_BORDER)
+                sel_border_comb = 1'b1;
+        end
     end
 
     // Sun HUD: 10 yellow blocks across the top.  Block i is lit when
@@ -256,6 +270,7 @@ module entity_drawer(
     logic       cursor_hit_d;
     logic       sun_hit_d;
     logic       sel_hit_d;
+    logic       sel_border_d;
     logic [1:0] selected_plant_d;
 
     always_ff @(posedge clk or posedge reset) begin
@@ -268,6 +283,7 @@ module entity_drawer(
             cursor_hit_d     <= 1'b0;
             sun_hit_d        <= 1'b0;
             sel_hit_d        <= 1'b0;
+            sel_border_d     <= 1'b0;
             selected_plant_d <= 2'd0;
         end else begin
             bg_color_d       <= bg_color;
@@ -278,6 +294,7 @@ module entity_drawer(
             cursor_hit_d     <= cursor_hit_comb;
             sun_hit_d        <= sun_hit_comb;
             sel_hit_d        <= sel_hit_comb;
+            sel_border_d     <= sel_border_comb;
             selected_plant_d <= selected_plant;
         end
     end
@@ -301,6 +318,8 @@ module entity_drawer(
             color_out = COL_YELLOW;
         if (sel_hit_d)
             color_out = (selected_plant_d == 2'd1) ? COL_ORANGE : COL_GREEN;
+        if (sel_border_d)
+            color_out = COL_YELLOW;
     end
 
 endmodule

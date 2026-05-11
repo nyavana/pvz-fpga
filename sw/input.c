@@ -45,8 +45,7 @@ int input_poll(void)
         case KEY_SPACE: return INPUT_SPACE;
         case KEY_D:     return INPUT_D;
         case KEY_ESC:   return INPUT_ESC;
-        case KEY_Q:     return INPUT_Q;
-        case KEY_W:     return INPUT_W;
+        case KEY_TAB:   return INPUT_TAB;
         default:        break;
         }
     }
