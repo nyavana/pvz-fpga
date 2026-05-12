@@ -1,0 +1,63 @@
+# Title:     Avalon register map (51 words)
+# Section:   04-interface
+# Documents: hw/pvz_top.sv, sw/pvz.h, sw/render.c, sw/pvz_driver.c
+# Defends:   Where is every Avalon register, what is its bit layout, who writes it from software, who reads it in hardware?
+# Detail:    block
+
+...@../common.d2
+
+direction: down
+
+title: "Avalon register map — 51 words, 32 bits each\nAddress is in WORDS (qsys addressUnits = WORDS);\nbyte offset = word_index * 4.\nDecoded in hw/pvz_top.sv:114-146." {
+  class: note
+}
+
+regfile: "Register file (51 words, by word index)" {
+  class: layer
+  direction: down
+  grid-columns: 1
+
+  w00: "word 00  PVZ_REG_PLANTS\nbit i = peashooter at cell i (i = row*8+col)\nSW writer: render.c render_plants() via PVZ_WRITE_REG\nHW consumer: entity_drawer.plant_present[31:0]" { class: register }
+  w01: "word 01  PVZ_REG_SUNFLOWER\nbit i = sunflower at cell i\nSW writer: render.c render_plants()\nHW consumer: entity_drawer.sunflower_present[31:0]" { class: register }
+
+  w02_31: "words 02..31  UNUSED in spec, BUT ALIASED\nthe `else if (address < 6'd40)` decoder at hw/pvz_top.sv:122\nfolds every write in this range into the zombie register slot,\nzombie index = address[2:0].  Software MUST NOT write here." { class: register }
+
+  w32: "word 32  PVZ_REG_ZOMBIE(0)\nbit [31]=alive, bits [11:10]=row (0..3), bits [9:0]=x_pixel (0..639)\nSW writer: render.c render_zombies(), pvz_pack_entity()\nHW consumer: entity_drawer zombie_alive[0], zombie_x[0], zombie_row[0]" { class: register }
+  w33: "word 33  PVZ_REG_ZOMBIE(1)  same encoding as ZOMBIE(0)" { class: register }
+  w34: "word 34  PVZ_REG_ZOMBIE(2)  same encoding" { class: register }
+  w35: "word 35  PVZ_REG_ZOMBIE(3)  same encoding" { class: register }
+  w36: "word 36  PVZ_REG_ZOMBIE(4)  same encoding" { class: register }
+  w37: "word 37  PVZ_REG_ZOMBIE(5)  same encoding" { class: register }
+  w38: "word 38  PVZ_REG_ZOMBIE(6)  same encoding" { class: register }
+  w39: "word 39  PVZ_REG_ZOMBIE(7)  same encoding" { class: register }
+
+  w40: "word 40  PVZ_REG_PEA(0)\nbit [31]=alive, bits [11:10]=row, bits [9:0]=x_pixel\nSW writer: render.c render_peas(), pvz_pack_entity()\nHW consumer: entity_drawer pea_alive[0], pea_x[0], pea_row[0]" { class: register }
+  w41: "word 41  PVZ_REG_PEA(1)  same encoding as PEA(0)" { class: register }
+  w42: "word 42  PVZ_REG_PEA(2)  same encoding" { class: register }
+  w43: "word 43  PVZ_REG_PEA(3)  same encoding" { class: register }
+  w44: "word 44  PVZ_REG_PEA(4)  same encoding" { class: register }
+  w45: "word 45  PVZ_REG_PEA(5)  same encoding" { class: register }
+  w46: "word 46  PVZ_REG_PEA(6)  same encoding" { class: register }
+  w47: "word 47  PVZ_REG_PEA(7)  same encoding" { class: register }
+
+  w48: "word 48  PVZ_REG_CURSOR\nbit [31]=visible, bits [4:2]=col (0..7), bits [1:0]=row (0..3)\nSW writer: render.c render_cursor(), pvz_pack_cursor()\nHW consumer: entity_drawer cursor_visible, cursor_col, cursor_row" { class: register }
+  w49: "word 49  PVZ_REG_SUN\nbits [13:0]=sun count\nSW writer: render.c render_sun()\nHW consumer: entity_drawer sun_value[13:0] (drives HUD blocks)" { class: register }
+  w50: "word 50  PVZ_REG_SELECTED\nbits [1:0]=selected plant (0=peashooter, 1=sunflower)\nSW writer: render.c render_selected()\nHW consumer: entity_drawer selected_plant[1:0]\n(gates which plant-selector box wears the yellow border)" { class: register }
+}
+
+alias_note: "ALIAS GOTCHA\nThe decoder at hw/pvz_top.sv:122 uses\n`else if (address < 6'd40)` for the zombie\nrange, so words 2..31 also land in the zombie\nslot indexed by address[2:0].  This catches\nany off-by-one in software register macros." {
+  class: note
+}
+
+sw_path: "Software path (per write)\nsw/render.c write_reg(word_index, value)\n  -> ioctl(fd, PVZ_WRITE_REG, &arg)  [sw/render.c:23]\n  -> pvz_ioctl()                     [sw/pvz_driver.c:30]\n  -> iowrite32(value, virtbase + word_index*4)  [sw/pvz_driver.c:40]" {
+  class: note
+}
+
+hw_path: "Hardware path (per write)\npvz_top Avalon-MM slave latches writedata\non posedge clk when (chipselect && write),\ndecoded by the if/else if chain at\nhw/pvz_top.sv:114-146.  No vsync latching." {
+  class: note
+}
+
+title -> regfile: { style.stroke-dash: 3 }
+regfile.w02_31 -> alias_note: { style.stroke-dash: 3 }
+sw_path -> regfile: { style.stroke-dash: 3 }
+regfile -> hw_path: { style.stroke-dash: 3 }

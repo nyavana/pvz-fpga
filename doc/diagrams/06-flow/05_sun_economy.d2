@@ -1,0 +1,66 @@
+# Title:     Sun economy flow
+# Section:   06-flow
+# Documents: sw/game.c, sw/game.h, sw/render.c, sw/pvz.h, hw/pvz_top.sv, hw/entity_drawer.sv
+# Defends:   How does sun accumulate over time, how do sunflowers boost it, and how is it shown on screen?
+# Detail:    block
+
+...@../common.d2
+
+direction: right
+
+tick: "Step 1: every frame, update_sun (sw/game.c:265-272)" {
+  class: layer
+
+  dec: "gs->sun_timer--" { class: sw_module }
+  check: "sun_timer <= 0 ?" { class: fsm_state }
+  wait: "wait for next tick\n(timer still > 0)" { class: note }
+
+  dec -> check
+  check -> wait: "no" { style.stroke-dash: 3 }
+}
+
+grant: "Step 2: grant sun (sw/game.c:268-271)" {
+  class: layer
+
+  count: "n = count_sunflowers(gs)\n(sw/game.c:254-262)\nwalks 4x8 grid counting\nPLANT_SUNFLOWER cells" { class: sw_module }
+
+  add: "gs->sun += SUN_INCREMENT (25) * (1 + n)\n  base 25 + 25 per sunflower\nsun_timer = SUN_INTERVAL (480 frames)" { class: sw_module }
+
+  count -> add
+}
+
+render: "Step 3: render_frame writes sun word (sw/render.c:90-95)" {
+  class: layer
+
+  write: "render_sun:\n  ioctl PVZ_WRITE_REG\n  word 49 (PVZ_REG_SUN) <=\n    gs->sun & 0x3FFF\n(14-bit field, sw/pvz.h:22)" { class: sw_module }
+}
+
+fpga: "Step 4: FPGA HUD redraws" {
+  class: layer
+
+  regfile: "pvz_top.sun_value <= writedata[13:0]\n(hw/pvz_top.sv:140-142)" { class: hw_module }
+  hud: "entity_drawer sun HUD\n(hw/entity_drawer.sv:271-277)\n  for i in 0..9:\n    bx = SUN_X + i * SUN_PITCH\n    draw yellow block if\n      sun_value >= (i+1) * SUN_PER_BLOCK" { class: hw_module }
+  blocks: "1 yellow block per 50 sun units\n(max 10 blocks = 500 sun shown)" { class: signal }
+
+  regfile -> hud
+  hud -> blocks
+}
+
+tick.check -> grant.count: "yes"
+grant.add -> render.write
+render.write -> fpga.regfile
+
+spend: "Spending sun (sw/game.c:34-51)" {
+  class: layer
+
+  pay: "game_place_plant deducts cost on success:\n  gs->sun -= cost\nPLANT_COST = SUNFLOWER_COST = 50\nrejects when gs->sun < cost" { class: sw_module }
+}
+
+spend.pay -> render.write: "same frame's render"
+
+note_constants: "Constants (sw/game.h, hw/entity_drawer.sv:103-108):\n  INITIAL_SUN     = 100\n  SUN_INCREMENT   = 25\n  SUN_INTERVAL    = 8 * 60 = 480 frames\n                  = 8 s at 60 Hz\n  PLANT_COST      = 50\n  SUNFLOWER_COST  = 50\n  SUN_PER_BLOCK   = 50  (HW)\n  max 10 HUD blocks" { class: note }
+
+note_growth: "Per tick, with n sunflowers on the field:\n  gs->sun += 25 * (1 + n)\nEvery 8 s, no sunflowers => +25.\nOne sunflower (=50 sun) => +50.\nTwo sunflowers => +75, etc." { class: note }
+
+tick -> note_constants: { style.stroke-dash: 3 }
+grant.add -> note_growth: { style.stroke-dash: 3 }

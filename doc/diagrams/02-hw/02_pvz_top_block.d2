@@ -1,0 +1,93 @@
+# Title:     pvz_top block diagram
+# Section:   02-hw
+# Documents: hw/pvz_top.sv, hw/entity_drawer.sv, hw/bg_grid.sv, hw/sprite_rom.sv, hw/vga_counters.sv, hw/color_palette.sv
+# Defends:   How are the FPGA submodules inside pvz_top wired together, and which registers feed which child?
+# Detail:    block
+
+...@../common.d2
+
+direction: down
+
+pvz_top: pvz_top (hw/pvz_top.sv) {
+  class: layer
+
+  avalon: "Avalon-MM slave port\naddress[5:0], writedata[31:0],\nwrite, chipselect" {
+    class: hw_module
+  }
+
+  regfile: "51-word register file\n(21 used: 0..1, 32..50;\n2..31 alias into zombie slot)" {
+    class: hw_module
+  }
+
+  vga_counters: "vga_counters\n(hw/vga_counters.sv)\nhcount[10:0], vcount[9:0]" {
+    class: hw_module
+  }
+
+  bg_grid: "bg_grid\n(hw/bg_grid.sv)\nlawn checker, combinational" {
+    class: hw_module
+  }
+
+  plant_rom: "plant_rom_inst\nsprite_rom #(peashooter_idx.mem)\n64x64, 1-cycle read" {
+    class: hw_module
+  }
+
+  sunflower_rom: "sunflower_rom_inst\nsprite_rom #(sunflower_idx.mem)\n64x64, 1-cycle read" {
+    class: hw_module
+  }
+
+  zombie_rom: "zombie_rom_inst\nsprite_rom #(zombie_idx.mem)\n64x64, 1-cycle read" {
+    class: hw_module
+  }
+
+  drawer: "entity_drawer\n(hw/entity_drawer.sv)\nracing-the-beam mux" {
+    class: hw_module
+  }
+
+  palette: "color_palette\n(hw/color_palette.sv)\nindex[7:0] -> RGB[23:0]" {
+    class: hw_module
+  }
+}
+
+vga_pins: "VGA pins\nVGA_R/G/B[7:0],\nVGA_HS, VGA_VS, VGA_CLK,\nVGA_BLANK_n, VGA_SYNC_n" {
+  class: bus
+}
+
+# Avalon write decode
+pvz_top.avalon -> pvz_top.regfile: "address, writedata, write, chipselect\n(pvz_top.sv:95-148)"
+
+# Register taps -> entity_drawer
+pvz_top.regfile -> pvz_top.drawer: "plant_present[31:0] (word 0)\nsunflower_present[31:0] (word 1)\nselected_plant[1:0] (word 50)"
+pvz_top.regfile -> pvz_top.drawer: "zombie_alive[7:0],\nzombie_x_packed[79:0],\nzombie_row_packed[15:0]\n(words 32..39)"
+pvz_top.regfile -> pvz_top.drawer: "pea_alive[7:0],\npea_x_packed[79:0],\npea_row_packed[15:0]\n(words 40..47)"
+pvz_top.regfile -> pvz_top.drawer: "cursor_visible, cursor_col[2:0],\ncursor_row[1:0] (word 48)\nsun_value[13:0] (word 49)"
+
+# VGA timing fans out
+pvz_top.vga_counters -> pvz_top.bg_grid: "px[9:0] = hcount[10:1]\npy[9:0] = vcount"
+pvz_top.vga_counters -> pvz_top.drawer: "px[9:0], py[9:0]"
+
+# Background -> drawer
+pvz_top.bg_grid -> pvz_top.drawer: "bg_color[7:0]"
+
+# Sprite ROM read interfaces (1-cycle latency)
+pvz_top.drawer -> pvz_top.plant_rom: "plant_rd_addr[11:0]"
+pvz_top.plant_rom -> pvz_top.drawer: "plant_rd_pixel[7:0]"
+pvz_top.drawer -> pvz_top.sunflower_rom: "(shares plant_rd_addr)"
+pvz_top.sunflower_rom -> pvz_top.drawer: "sunflower_rd_pixel[7:0]"
+pvz_top.drawer -> pvz_top.zombie_rom: "zombie_rd_addr[11:0]"
+pvz_top.zombie_rom -> pvz_top.drawer: "zombie_rd_pixel[7:0]"
+
+# Drawer -> palette -> pins
+pvz_top.drawer -> pvz_top.palette: "color_out[7:0]"
+pvz_top.palette -> vga_pins: "pal_r/g/b[7:0]\n(black during blanking,\npvz_top.sv:243-253)"
+pvz_top.vga_counters -> vga_pins: "VGA_HS, VGA_VS, VGA_CLK,\nVGA_BLANK_n, VGA_SYNC_n"
+
+# Notes anchored to the relevant facts
+note_comb: "color_out is COMBINATIONAL\n(always_comb at hw/entity_drawer.sv:330).\nThe 1-cycle latency is in the stage-1\nhit-signal flops + sprite ROM read,\nnot in a registered output." { class: note }
+
+note_tearing: "No vsync latching: a write that\nraces the scan produces a one-frame\ntearing window.\n(hw/pvz_top.sv:25-27 header)" { class: note }
+
+note_alias: "Decoder uses `else if (address < 6'd40)`\nat hw/pvz_top.sv:122, so words 2..31\nalias into the zombie register slot." { class: note }
+
+pvz_top.drawer -> note_comb: { style.stroke-dash: 3 }
+pvz_top.regfile -> note_tearing: { style.stroke-dash: 3 }
+pvz_top.regfile -> note_alias: { style.stroke-dash: 3 }

@@ -1,0 +1,79 @@
+# Title:     Process architecture - userspace + kernel + open FDs
+# Section:   03-sw
+# Documents: sw/main.c, sw/game.c, sw/render.c, sw/input.c, sw/pvz_driver.c, sw/pvz.h
+# Defends:   Which Linux processes/modules make up the software side, and which file descriptors carry which I/O between them?
+# Detail:    block
+
+...@../common.d2
+
+direction: right
+
+userspace: "Userspace - process `pvz`" {
+  class: layer
+
+  pvz_bin: "pvz binary\n(linked from sw/main.c, sw/game.c,\nsw/render.c, sw/input.c)" {
+    class: sw_module
+
+    main_c: "main.c\nmain() opens /dev/pvz and the input device,\nthen drives the 60 Hz loop\n(sw/main.c:70-150)" {
+      class: sw_module
+    }
+
+    game_c: "game.c\ngame_init, game_update, game_place_plant,\ngame_remove_plant" {
+      class: sw_module
+    }
+
+    render_c: "render.c\nrender_init(fd) stores the fd;\nrender_frame walks game state ->\nioctl PVZ_WRITE_REG per word\n(sw/render.c:20-24)" {
+      class: sw_module
+    }
+
+    input_c: "input.c\ninput_init(path) opens the evdev node\nO_RDONLY | O_NONBLOCK;\ninput_poll reads struct input_event\n(sw/input.c:21-71)" {
+      class: sw_module
+    }
+  }
+}
+
+kernel: "Linux kernel" {
+  class: layer
+
+  driver: "pvz_driver.ko\nout-of-tree platform driver\nregistered as misc device\n(sw/pvz_driver.c, name 'pvz')" {
+    class: kernel_module
+  }
+
+  evdev: "evdev / input core\n(in-tree)" {
+    class: kernel_module
+  }
+}
+
+dev_pvz: "/dev/pvz\n(misc dev, ioctl)" { class: bus }
+dev_input: "/dev/input/eventN\n(evdev, read)" { class: bus }
+
+usb_kbd: "USB keyboard\n(or Xbox 360 gamepad)" { class: external }
+
+# Userspace open() handles
+userspace.pvz_bin.main_c -> dev_pvz: "open(\"/dev/pvz\", O_RDWR)\n(sw/main.c:82)"
+userspace.pvz_bin.main_c -> dev_input: "input_init(\"/dev/input/event0\")\n(sw/main.c:72, :90)"
+
+# Path 1: keyboard events flow up
+usb_kbd -> kernel.evdev: "USB HID reports"
+kernel.evdev -> dev_input: "input_event stream"
+dev_input -> userspace.pvz_bin.input_c: "read(input_fd, &ev, sizeof(ev))\nnon-blocking; returns INPUT_*\n(sw/input.c:38, :70)"
+userspace.pvz_bin.input_c -> userspace.pvz_bin.main_c: "input_poll() result"
+
+# Path 2: ioctl path to the FPGA register file
+userspace.pvz_bin.main_c -> userspace.pvz_bin.render_c: "render_frame(&gs)\n(sw/main.c:122)"
+userspace.pvz_bin.render_c -> dev_pvz: "ioctl(fd, PVZ_WRITE_REG, &arg)\none syscall per iowrite32\n(sw/render.c:23)"
+dev_pvz -> kernel.driver: "pvz_ioctl handler\n(sw/pvz_driver.c:30)"
+
+# Internal game-loop wiring (annotated only)
+userspace.pvz_bin.main_c -> userspace.pvz_bin.game_c: "process_input(&gs) :114\nthen game_update(&gs) :119"
+
+process_note: "`pvz` runs as a normal userspace process; pvz_driver.ko is\nan out-of-tree module loaded via `insmod`.\nThere are exactly two open FDs that matter:\n  pvz_fd     -> /dev/pvz           (ioctl path, write only)\n  input_fd   -> /dev/input/eventN  (read path, non-blocking)" {
+  class: note
+}
+
+ioctl_note: "Every word sent to the FPGA is one `ioctl` syscall:\nsw/render.c -> kernel pvz_ioctl -> iowrite32.\nrender_frame issues 21 writes in the normal case." {
+  class: note
+}
+
+userspace -> process_note: { style.stroke-dash: 3 }
+kernel -> ioctl_note: { style.stroke-dash: 3 }

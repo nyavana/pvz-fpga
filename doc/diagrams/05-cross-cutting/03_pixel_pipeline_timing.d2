@@ -1,0 +1,58 @@
+# Title:     entity_drawer 2-stage pipeline timing
+# Section:   05-cross-cutting
+# Documents: hw/entity_drawer.sv, hw/sprite_rom.sv, hw/pvz_top.sv
+# Defends:   Where do the cycles go for a single pixel? Which signal is registered, which is combinational?
+# Detail:    block
+
+...@../common.d2
+
+direction: right
+
+cycle0: "Cycle 0 — stage-1 combinational hit detect" {
+  class: layer
+
+  px: "px[9:0], py[9:0]\nfrom vga_counters" { class: signal }
+
+  hits_comb: "always_comb hit-detect\n(hw/entity_drawer.sv:165-280)\n- plant_here, sunflower_here\n- zombie_hit_comb (loops 0..7)\n- pea_hit_comb (loops 0..7)\n- cursor_hit_comb\n- sun_hit_comb\n- sel0/1_hit/border_comb" { class: hw_module }
+
+  addrs: "sprite ROM address generators\nplant_rd_addr[11:0],\nzombie_rd_addr[11:0]\n(combinational, this cycle)" { class: signal }
+
+  px -> hits_comb
+  hits_comb -> addrs: "issued to ROMs end of cycle"
+}
+
+cycle1: "Cycle 1 — stage-1 flops capture; sprite ROMs return data" {
+  class: layer
+
+  stage1_ff: "always_ff @(posedge clk)\n(hw/entity_drawer.sv:297-325)\n- bg_color_d\n- plant_here_d, sunflower_here_d\n- zombie_hit_d, pea_hit_d\n- cursor_hit_d, sun_hit_d\n- sel0/1_hit_d, sel0/1_border_d\n- selected_plant_d" { class: hw_module }
+
+  rom_read: "sprite_rom 1-cycle read\n(hw/sprite_rom.sv)\n- plant_rd_pixel[7:0]\n- sunflower_rd_pixel[7:0]\n- zombie_rd_pixel[7:0]" { class: hw_module }
+
+  stage1_ff -> rom_read: "address registered last cycle"
+}
+
+cycle2: "Cycle 2 — stage-2 combinational mux produces color_out THIS cycle" {
+  class: layer
+
+  mux: "always_comb final mux\n(hw/entity_drawer.sv:330-358)\nlayer order (bottom -> top):\n  bg -> plant -> sunflower ->\n  pea -> zombie -> cursor ->\n  sun HUD -> selector fill ->\n  selector border" { class: hw_module }
+
+  color_out: "color_out[7:0]\nCOMBINATIONAL — drives\ncolor_palette this same cycle" { class: signal }
+
+  mux -> color_out
+}
+
+palette: "color_palette\n(hw/color_palette.sv)\nindex -> RGB, also combinational" { class: hw_module }
+
+cycle0 -> cycle1: "posedge clk\nstage-1 flops capture hits + ROM addr"
+cycle1 -> cycle2: "ROM data + registered hits\navailable at start of cycle"
+cycle2.color_out -> palette: "feeds palette in the same cycle"
+
+note_latency: "1-cycle visible latency lives in:\n  - stage-1 hit-signal flops\n    (always_ff at hw/entity_drawer.sv:297)\n  - sprite ROM read\n    (hw/sprite_rom.sv)\nNOT in color_out." { class: note }
+
+note_comb: "color_out is COMBINATIONAL.\nalways_comb at hw/entity_drawer.sv:330\nmeans no extra register on the final\nstage — color_out resolves in the same\ncycle the ROM data + registered hits\narrive." { class: note }
+
+note_align: "Stage-1 flops exist specifically to\nalign the registered overlay hits with\nthe 1-cycle ROM read latency, so the\nstage-2 mux sees both sets of operands\non the same cycle." { class: note }
+
+cycle1.stage1_ff -> note_latency: { style.stroke-dash: 3 }
+cycle2.mux -> note_comb: { style.stroke-dash: 3 }
+cycle1 -> note_align: { style.stroke-dash: 3 }

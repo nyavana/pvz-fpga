@@ -1,0 +1,76 @@
+# Title:     Build pipelines — HW workstation lane and SW lane
+# Section:   05-cross-cutting
+# Documents: hw/Makefile, hw/soc_system.qsys, sw/Makefile, CLAUDE.md
+# Defends:   Two parallel build flows produce one SD card image: how do .rbf, .dtb, .ko, and pvz get there?
+# Detail:    block
+
+...@../common.d2
+
+direction: down
+
+hw_lane: "HW lane — Quartus / Platform Designer on workstation (hw/Makefile)" {
+  class: layer
+
+  qsys_src: "hw/soc_system.qsys\n+ hw/*.sv sources\n(pvz_top, vga_counters,\nbg_grid, entity_drawer,\nsprite_rom, color_palette)" { class: hw_module }
+
+  qsys_gen: "make qsys\nqsys-generate --synthesis=VERILOG\nemits soc_system/synthesis/*.v\n(hw/Makefile:42-46)" { class: hw_module }
+
+  quartus_compile: "make quartus\nquartus_sh --flow compile\nsynthesis -> fitting -> assembly\n(hw/Makefile:50-55)" { class: hw_module }
+
+  sof: "output_files/soc_system.sof\nSRAM Object File\n(programmable via JTAG)" { class: hw_module }
+
+  rbf_step: "make rbf\nquartus_cpf -c .sof -> .rbf\n(hw/Makefile:60-64)" { class: hw_module }
+
+  rbf: "output_files/soc_system.rbf\nRaw Binary File for SD card\nU-Boot loads this at boot" { class: hw_module }
+
+  dtb_step: "make dtb\nsopc2dts -> soc_system.dts\ndtc -> soc_system.dtb\n(hw/Makefile:66-82)" { class: hw_module }
+
+  dtb: "soc_system.dtb\nDevice Tree Blob — describes\nthe Avalon slave at 0xFF20_0000\n(matches csee4840,pvz_gpu-1.0)" { class: hw_module }
+
+  qsys_src -> qsys_gen -> quartus_compile -> sof -> rbf_step -> rbf
+  qsys_gen -> dtb_step -> dtb
+}
+
+sw_lane: "SW lane — on-board native build OR cross-compile (sw/Makefile)" {
+  class: layer
+
+  sw_src: "sw/main.c, sw/game.c,\nsw/render.c, sw/input.c,\nsw/pvz_driver.c\n+ headers (sw/*.h)" { class: sw_module }
+
+  native: "Default: on-board native build\nKERNEL_SOURCE = /usr/src/linux-headers-{uname -r}\nrun directly on DE1-SoC\n(sw/Makefile:10)" { class: sw_module }
+
+  cross: "Cross-compile on workstation:\n  CC=arm-linux-gnueabihf-gcc\n  ARCH=arm\n  CROSS_COMPILE=arm-linux-gnueabihf-\n  KERNEL_SOURCE=/path/to/headers" { class: sw_module }
+
+  module_step: "make module\nbuilds out-of-tree kernel module\nagainst KERNEL_SOURCE\n(sw/Makefile:15-16)" { class: sw_module }
+
+  pvz_step: "make pvz\n{CC} -Wall -O2 main.c game.c\nrender.c input.c -lpthread\n(sw/Makefile:22-24)" { class: sw_module }
+
+  ko: "pvz_driver.ko\nout-of-tree Linux kernel module\n(insmod at boot)" { class: kernel_module }
+
+  bin: "pvz\nARM userspace game binary\n(./pvz [/dev/input/eventN])" { class: sw_module }
+
+  sw_src -> native
+  sw_src -> cross
+  native -> module_step
+  native -> pvz_step
+  cross -> module_step
+  cross -> pvz_step
+  module_step -> ko
+  pvz_step -> bin
+}
+
+sd_card: "SD card / on-board /home install\n(soc_system.rbf, soc_system.dtb,\npvz_driver.ko, pvz)" { class: external }
+
+hw_lane.rbf -> sd_card
+hw_lane.dtb -> sd_card
+sw_lane.ko -> sd_card
+sw_lane.bin -> sd_card
+
+note_kernel_match: "Cross-compile target requires kernel\nheaders v4.19.0 to match the board\nkernel. Native on-board build uses\n/lib/modules/{uname -r}/build via\nKERNEL_SOURCE in sw/Makefile." { class: note }
+
+note_addr_units: "The .dtb encodes addressUnits=WORDS\nfrom the qsys instance. The kernel\ndriver still uses byte offsets:\niowrite32 at virtbase + word*4.\n(See 04-interface/01_avalon_bus for\ndetails.)" { class: note }
+
+note_no_ci: "Hardware build (.rbf, .dtb) is\nproduced on a Quartus-equipped\nworkstation. The kernel module and\ngame binary are produced either\non-board or by cross-compile from a\ndev workstation." { class: note }
+
+sw_lane.cross -> note_kernel_match: { style.stroke-dash: 3 }
+hw_lane.dtb -> note_addr_units: { style.stroke-dash: 3 }
+sd_card -> note_no_ci: { style.stroke-dash: 3 }

@@ -1,0 +1,124 @@
+# common.d2 — shared classes for the PvZ-on-DE1-SoC diagram catalog.
+#
+# Every diagram under doc/diagrams/<section>/ MUST import this file as
+# its first non-comment statement using the spread form:
+#
+#     ...@../common.d2
+#
+# Gotcha: D2 0.7.1 rejects the `...: @file` form (the colon-prefixed
+# variant silently fails or errors out depending on context). Use the
+# unprefixed `...@file` spread shown above.
+
+classes: {
+  # FPGA-side SystemVerilog modules. Blue family.
+  hw_module: {
+    shape: rectangle
+    style: {
+      fill: "#dbeafe"
+      stroke: "#1d4ed8"
+      stroke-width: 2
+      font-color: "#0f172a"
+    }
+  }
+
+  # HPS userspace C modules. Green family.
+  sw_module: {
+    shape: rectangle
+    style: {
+      fill: "#dcfce7"
+      stroke: "#15803d"
+      stroke-width: 2
+      font-color: "#052e16"
+    }
+  }
+
+  # Linux kernel module / driver code. Amber family.
+  kernel_module: {
+    shape: rectangle
+    style: {
+      fill: "#fef3c7"
+      stroke: "#b45309"
+      stroke-width: 2
+      font-color: "#451a03"
+    }
+  }
+
+  # Avalon-MM register word. Slate.
+  register: {
+    shape: rectangle
+    style: {
+      fill: "#e2e8f0"
+      stroke: "#475569"
+      stroke-width: 1
+      font-color: "#0f172a"
+    }
+  }
+
+  # Single- or multi-bit signal on a signal-level diagram.
+  signal: {
+    shape: rectangle
+    style: {
+      fill: "#f8fafc"
+      stroke: "#64748b"
+      stroke-width: 1
+      stroke-dash: 2
+      font-color: "#0f172a"
+    }
+  }
+
+  # Multi-wire bundle (Avalon, VGA, DDR).
+  bus: {
+    shape: hexagon
+    style: {
+      fill: "#cffafe"
+      stroke: "#0e7490"
+      stroke-width: 2
+      font-color: "#083344"
+    }
+  }
+
+  # FSM state.
+  fsm_state: {
+    shape: oval
+    style: {
+      fill: "#ede9fe"
+      stroke: "#6d28d9"
+      stroke-width: 2
+      font-color: "#1e1b4b"
+    }
+  }
+
+  # Off-chip / out-of-system: USB keyboard, monitor, SD card, host PC.
+  external: {
+    shape: cloud
+    style: {
+      fill: "#f1f5f9"
+      stroke: "#334155"
+      stroke-width: 2
+      font-color: "#0f172a"
+    }
+  }
+
+  # Annotation callout (constants, latency, caveats).
+  note: {
+    shape: text
+    style: {
+      fill: "#fef9c3"
+      stroke: "#a16207"
+      stroke-width: 1
+      font-color: "#451a03"
+      italic: true
+    }
+  }
+
+  # Layer / containment wrapper (HPS, FPGA, qsys, etc.).
+  layer: {
+    style: {
+      fill: "#f8fafc"
+      stroke: "#94a3b8"
+      stroke-width: 1
+      stroke-dash: 3
+      font-color: "#0f172a"
+    }
+  }
+}

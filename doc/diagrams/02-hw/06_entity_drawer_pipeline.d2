@@ -1,0 +1,132 @@
+# Title:     entity_drawer — racing-the-beam 2-stage pipeline
+# Section:   02-hw
+# Documents: hw/entity_drawer.sv, hw/sprite_rom.sv, hw/pvz_top.sv
+# Defends:   How does entity_drawer hide the 1-cycle sprite ROM latency, and where exactly do the layers merge?
+# Detail:    block
+
+...@../common.d2
+
+direction: right
+
+inputs: "Per-pixel inputs\npx, py from vga_counters\n(pvz_top.sv:65-66)\nbg_color from bg_grid\nEntity registers from pvz_top regfile" {
+  class: signal
+}
+
+stage1: "Stage 1 — combinational hit detect + address gen,\nresults registered into the *_d flops" {
+  class: layer
+  direction: down
+
+  cell_decode: "Cell decode\n(entity_drawer.sv:144-158)\nin_grid    = px in [64,576) && py in [112,368)\ncell_col   = gx[8:6]\ncell_row   = gy[7:6]\nin_cell_x  = gx[5:0]\nin_cell_y  = gy[5:0]" {
+    class: signal
+  }
+
+  plant_addr_gen: "plant_rd_addr issued\n(entity_drawer.sv:166)\nassign plant_rd_addr =\n  {in_cell_y, in_cell_x};\n(plant + sunflower share this)" {
+    class: signal
+  }
+
+  zombie_addr_gen: "zombie_rd_addr issued\n(entity_drawer.sv:175-194)\npriority encoder across\nzombie_alive[7:0];\nfirst hit writes zombie_in_{x,y}\nassign zombie_rd_addr =\n  {zombie_in_y, zombie_in_x};" {
+    class: signal
+  }
+
+  plant_here: "plant_here (comb)\nplant_present[plant_idx] && in_grid\nplant_idx = {cell_row, cell_col}" {
+    class: signal
+  }
+
+  sunflower_here: "sunflower_here (comb)\nsunflower_present[plant_idx] && in_grid" {
+    class: signal
+  }
+
+  zombie_hit: "zombie_hit_comb\n(entity_drawer.sv:173-193)\nany of 8 alive zombies covers (px, py)" {
+    class: signal
+  }
+
+  pea_hit: "pea_hit_comb\n(entity_drawer.sv:199-211)\nany alive pea covers (px, py)\n8x8 sprite centered in its row" {
+    class: signal
+  }
+
+  cursor_hit: "cursor_hit_comb\n(entity_drawer.sv:214-230)\non border (CURSOR_BORDER=4 px)\nof the cursor cell if visible" {
+    class: signal
+  }
+
+  sun_hit: "sun_hit_comb\n(entity_drawer.sv:268-280)\n10 yellow blocks at top;\nblock i lit when sun_value >= (i+1)*50" {
+    class: signal
+  }
+
+  sel_hits: "sel0/1_hit_comb +\nsel0/1_border_comb\n(entity_drawer.sv:238-264)\nplant-selector boxes at top-left;\nfill always drawn, border gated\nby selected_plant in stage 2" {
+    class: signal
+  }
+
+  bg_passthrough: "bg_color passthrough\n(into bg_color_d flop)" {
+    class: signal
+  }
+
+  hit_flops: "always_ff @(posedge clk)\n(entity_drawer.sv:297-325)\nbg_color_d, plant_here_d,\nsunflower_here_d, zombie_hit_d,\npea_hit_d, cursor_hit_d,\nsun_hit_d, sel0_hit_d,\nsel0_border_d, sel1_hit_d,\nsel1_border_d, selected_plant_d.\nThis is where the 1-cycle\npipeline latency lives." {
+    class: hw_module
+  }
+
+  bg_passthrough  -> hit_flops: "bg_color"
+  plant_here      -> hit_flops: "plant_here"
+  sunflower_here  -> hit_flops: "sunflower_here"
+  zombie_hit      -> hit_flops: "zombie_hit_comb"
+  pea_hit         -> hit_flops: "pea_hit_comb"
+  cursor_hit      -> hit_flops: "cursor_hit_comb"
+  sun_hit         -> hit_flops: "sun_hit_comb"
+  sel_hits        -> hit_flops: "sel0/1 hit + border"
+  cell_decode     -> plant_addr_gen
+  cell_decode     -> zombie_addr_gen
+  cell_decode     -> plant_here:     "plant_idx = {cell_row, cell_col}"
+  cell_decode     -> sunflower_here: "same plant_idx"
+}
+
+# Sprite ROM read happens between stages (1 clk)
+plant_rom: "plant_rom_inst + sunflower_rom_inst\n(pvz_top.sv:179-191)\nshare plant_rd_addr;\nreturn pixel one cycle later" {
+  class: hw_module
+}
+
+zombie_rom: "zombie_rom_inst\n(pvz_top.sv:195-199)\nreturns pixel one cycle\nafter zombie_rd_addr" {
+  class: hw_module
+}
+
+stage2: "Stage 2 — combinational final mux\n(always_comb at entity_drawer.sv:330-358)" {
+  class: layer
+  direction: down
+
+  mux: "Layer priority (later overwrites earlier).\nNumbers track the if-statement order in the\nalways_comb block, NOT a clock count.\n  1. bg_color_d                       (line 331)\n  2. plant_rd_pixel    if plant_here_d\n     && pixel != 0xFF                 (332-333)\n  3. sunflower_rd_pixel if sunflower_here_d\n     && pixel != 0xFF                 (334-335)\n     (sunflower wins when both flags set)\n  4. COL_BRIGHT_GREEN  if pea_hit_d   (336-337)\n  5. zombie_rd_pixel   if zombie_hit_d\n     && pixel != 0xFF                 (338-339)\n  6. COL_YELLOW        if cursor_hit_d (340-341)\n  7. COL_YELLOW        if sun_hit_d    (342-343)\n  8. COL_GREEN         if sel0_hit_d   (347-348)\n     (peashooter fill, always drawn)\n  9. COL_ORANGE        if sel1_hit_d   (349-350)\n     (sunflower fill, always drawn)\n 10. COL_YELLOW        if sel0_border_d\n     && selected_plant_d == 0         (354-355)\n 11. COL_YELLOW        if sel1_border_d\n     && selected_plant_d == 1         (356-357)" {
+    class: hw_module
+  }
+}
+
+out: "color_out[7:0]\n-> color_palette (in pvz_top)\n-> VGA_R/G/B" { class: signal }
+
+# Flow: inputs into stage1
+inputs -> stage1.cell_decode:    "px, py, plant/sunflower regs"
+inputs -> stage1.zombie_hit:     "zombie_alive/x/row"
+inputs -> stage1.pea_hit:        "pea_alive/x/row"
+inputs -> stage1.cursor_hit:     "cursor_visible/col/row"
+inputs -> stage1.sun_hit:        "sun_value[13:0]"
+inputs -> stage1.sel_hits:       "selected_plant[1:0]"
+inputs -> stage1.bg_passthrough: "bg_color[7:0]"
+
+# Stage1 -> sprite ROMs (combinational addresses out)
+stage1.plant_addr_gen  -> plant_rom:  "plant_rd_addr[11:0]"
+stage1.zombie_addr_gen -> zombie_rom: "zombie_rd_addr[11:0]"
+
+# Sprite ROMs -> stage2 mux (data is registered inside the ROM,
+# valid the cycle when the *_d flops also become valid)
+plant_rom  -> stage2.mux: "plant_rd_pixel[7:0]\nsunflower_rd_pixel[7:0]\n(1 cycle after addr)"
+zombie_rom -> stage2.mux: "zombie_rd_pixel[7:0]\n(1 cycle after addr)"
+
+# Hit-flop outputs flow into stage2 (aligned with sprite pixels)
+stage1.hit_flops -> stage2.mux: "*_d hit signals,\nbg_color_d, selected_plant_d"
+
+# Stage2 mux output is color_out
+stage2.mux -> out
+
+# Critical accuracy note — pinned to the mux
+accuracy_note: "color_out is COMBINATIONAL\n(always_comb at hw/entity_drawer.sv:330).\nThe 1-cycle pipeline latency lives in the\nstage-1 hit-signal flops (always_ff at\nentity_drawer.sv:297) + the sprite ROM\nread latency, NOT in a registered output.\nDownstream consumers must therefore tolerate\na pixel that updates the same cycle a stage-2\ninput changes." { class: note }
+
+beam_note: "Racing-the-beam — no frame or line buffer.\nFor every VGA pixel the drawer evaluates\nall layers fresh; only the *_d flops carry\nany state between pixels (one clock deep).\nLatency from (px, py) to color_out: 1 clk\n(sprite read) + 0 clk (final mux is comb)." { class: note }
+
+stage1.hit_flops -> accuracy_note: { style.stroke-dash: 3 }
+stage2.mux -> accuracy_note: { style.stroke-dash: 3 }
+stage1 -> beam_note: { style.stroke-dash: 3 }

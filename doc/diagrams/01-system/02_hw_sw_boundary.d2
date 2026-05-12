@@ -1,0 +1,115 @@
+# Title:     HW/SW boundary swim lanes
+# Section:   01-system
+# Documents: sw/main.c, sw/game.c, sw/render.c, sw/input.c, sw/pvz_driver.c, hw/pvz_top.sv, hw/soc_system_top.sv, hw/vga_counters.sv, hw/bg_grid.sv, hw/sprite_rom.sv, hw/entity_drawer.sv, hw/color_palette.sv
+# Defends:   Which code runs on the ARM HPS under Linux and which code runs in the FPGA fabric, and what is the exact handoff between them?
+# Detail:    block
+
+...@../common.d2
+
+direction: down
+
+hps_lane: "HPS - Linux, ARM Cortex-A9" {
+  class: layer
+
+  userspace: "Userspace process: pvz" {
+    class: layer
+
+    main_c: "main.c\nprocess_input -> game_update -> render_frame\n(sw/main.c:114, :119, :122)" {
+      class: sw_module
+    }
+
+    game_c: "game.c\nphase order: sun, spawning, firing,\nprojectiles, zombies, collisions, win\n(sw/game.c:295-301)" {
+      class: sw_module
+    }
+
+    render_c: "render.c\npacks register words and calls\nioctl(PVZ_WRITE_REG)" {
+      class: sw_module
+    }
+
+    input_c: "input.c\nevdev poll on /dev/input/eventN" {
+      class: sw_module
+    }
+  }
+
+  driver: "pvz_driver.ko\n/dev/pvz misc device\nioctl PVZ_WRITE_REG (sw/pvz_driver.c:30-48)\niowrite32 at virtbase + 4*word_index" {
+    class: kernel_module
+  }
+}
+
+bridge: "Lightweight HPS-to-FPGA bridge\nAvalon-MM, base 0xFF20_0000\n(qsys addressUnits = WORDS)" {
+  class: bus
+}
+
+fpga_lane: "FPGA fabric - Cyclone V" {
+  class: layer
+
+  soc_top: "soc_system_top\n(hw/soc_system_top.sv)\nboard-level wrapper, VGA pin map" {
+    class: hw_module
+  }
+
+  soc_system: "soc_system (qsys)\n(hw/soc_system.qsys)\nbridge + pvz_top instance" {
+    class: hw_module
+  }
+
+  pvz_top: "pvz_top (hw/pvz_top.sv)" {
+    class: layer
+
+    vga_counters: "vga_counters\nhcount[10:0], vcount[9:0]" {
+      class: hw_module
+    }
+
+    bg_grid: "bg_grid\nlawn checker, combinational" {
+      class: hw_module
+    }
+
+    plant_rom: "sprite_rom\npeashooter_idx.mem" {
+      class: hw_module
+    }
+
+    sunflower_rom: "sprite_rom\nsunflower_idx.mem" {
+      class: hw_module
+    }
+
+    zombie_rom: "sprite_rom\nzombie_idx.mem" {
+      class: hw_module
+    }
+
+    entity_drawer: "entity_drawer\nracing-the-beam mux,\ncolor_out is always_comb\n(hw/entity_drawer.sv:330)" {
+      class: hw_module
+    }
+
+    color_palette: "color_palette\nindex[7:0] -> RGB[23:0]" {
+      class: hw_module
+    }
+  }
+}
+
+monitor: "VGA monitor\n640x480 @ 60 Hz" {
+  class: external
+}
+
+# HPS-side flow
+hps_lane.userspace.input_c -> hps_lane.userspace.main_c: "key state"
+hps_lane.userspace.main_c -> hps_lane.userspace.game_c: "game_update(&gs)"
+hps_lane.userspace.main_c -> hps_lane.userspace.render_c: "render_frame(&gs)"
+hps_lane.userspace.render_c -> hps_lane.driver: "ioctl(PVZ_WRITE_REG,\nword_index, value)"
+
+# Cross the boundary
+hps_lane.driver -> bridge: "iowrite32\n(sw/pvz_driver.c:40)"
+bridge -> fpga_lane.soc_top: "Avalon-MM\naddress[5:0], writedata[31:0],\nwrite, chipselect"
+fpga_lane.soc_top -> fpga_lane.soc_system: "wires through"
+fpga_lane.soc_system -> fpga_lane.pvz_top.vga_counters: "clk50, reset"
+
+# FPGA-internal datapath (abridged - see 02-hw/02_pvz_top_block for full wiring)
+fpga_lane.pvz_top.vga_counters -> fpga_lane.pvz_top.bg_grid: "px, py"
+fpga_lane.pvz_top.vga_counters -> fpga_lane.pvz_top.entity_drawer: "px, py"
+fpga_lane.pvz_top.bg_grid -> fpga_lane.pvz_top.entity_drawer: "bg_color[7:0]"
+fpga_lane.pvz_top.plant_rom -> fpga_lane.pvz_top.entity_drawer: "plant_rd_pixel[7:0]"
+fpga_lane.pvz_top.sunflower_rom -> fpga_lane.pvz_top.entity_drawer: "sunflower_rd_pixel[7:0]"
+fpga_lane.pvz_top.zombie_rom -> fpga_lane.pvz_top.entity_drawer: "zombie_rd_pixel[7:0]"
+fpga_lane.pvz_top.entity_drawer -> fpga_lane.pvz_top.color_palette: "color_out[7:0]"
+fpga_lane.pvz_top.color_palette -> monitor: "VGA_R/G/B[7:0],\nVGA_HS, VGA_VS, VGA_CLK"
+
+clock_note: "Everything to the right of the bridge runs\nat the 50 MHz fabric clock; the left side\nruns Linux userspace at the ARM clock." { class: note }
+
+bridge -> clock_note: { style.stroke-dash: 3 }

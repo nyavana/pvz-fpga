@@ -1,0 +1,101 @@
+# Title:     game_state - entity-relationship snapshot
+# Section:   03-sw
+# Documents: sw/game.h, sw/game.c, sw/render.c, sw/pvz.h
+# Defends:   What does the game state actually contain, where does each field come from, and where does it end up?
+# Detail:    block
+
+...@../common.d2
+
+direction: down
+
+title: "game_state_t snapshot (sw/game.h:77-95) -\nthe single struct that holds all per-frame state on the HPS.\nAll updates happen in game_update() (sw/game.c:288-302);\nrender_frame() then snapshots into hardware (sw/render.c)." {
+  class: note
+}
+
+gs: "game_state_t (sw/game.h:77)" {
+  class: register
+  direction: down
+
+  f_grid: "plant_t grid[GRID_ROWS][GRID_COLS]\n= plant_t grid[4][8]\nplant_t (sw/game.h:55-59):\n  int type            (PLANT_NONE | PLANT_PEASHOOTER | PLANT_SUNFLOWER)\n  int fire_cooldown   (frames until next shot)\n  int hp              (hits before destroyed, init PLANT_HP=3)" { class: register }
+
+  f_zombies: "zombie_t zombies[MAX_ZOMBIES]\n= zombie_t zombies[8]    (MAX_ZOMBIES = PVZ_MAX_ZOMBIES = 8)\nzombie_t (sw/game.h:61-69):\n  int active\n  int row              (0..GRID_ROWS-1)\n  int x_pixel          (screen x, moves leftward)\n  int hp               (init ZOMBIE_HP=3)\n  int move_counter     (frames until next 1 px step)\n  int eating           (1 while chewing a plant)\n  int eat_timer        (frames until next bite)" { class: register }
+
+  f_projs: "projectile_t projectiles[MAX_PROJECTILES]\n= projectile_t projectiles[16]   (MAX_PROJECTILES = 16)\nprojectile_t (sw/game.h:71-75):\n  int active\n  int row\n  int x_pixel          (screen x, moves rightward)" { class: register }
+
+  f_cursor: "int cursor_row\nint cursor_col\n(initial 0,0; bounded by GRID_ROWS/COLS in process_input)" { class: register }
+
+  f_sel: "int selected_plant_type\nPLANT_PEASHOOTER (1) or PLANT_SUNFLOWER (2)\ntoggled by INPUT_TAB (sw/main.c:58-62)" { class: register }
+
+  f_sun: "int sun\nint sun_timer\n(init sun=INITIAL_SUN=100; sun_timer=SUN_INTERVAL=480 frames)" { class: register }
+
+  f_spawn: "int zombies_spawned\nint spawn_timer\n(counts toward TOTAL_ZOMBIES=5;\nspawn_timer in [ZOMBIE_SPAWN_MIN, ZOMBIE_SPAWN_MAX]\n= [8*60, 15*60] frames)" { class: register }
+
+  f_state: "int state\nSTATE_PLAYING (0) | STATE_WIN (1) | STATE_LOSE (2)\n(also -1 from INPUT_ESC to exit, sw/main.c:64)" { class: register }
+
+  f_fc: "int frame_count\n(incremented at the top of game_update,\nsw/game.c:293)" { class: register }
+}
+
+consts: "Compile-time constants" {
+  class: note
+  direction: down
+
+  gridc: "Grid + screen (sw/pvz.h:29-35):\n  GRID_ROWS = 4         GRID_COLS = 8\n  CELL_SIZE = 64        GAME_AREA_X = 64    GAME_AREA_Y = 112\n  SCREEN_W  = 640       SCREEN_H = 480" { class: note }
+
+  plantc: "Plants (sw/game.h:18-21):\n  PLANT_COST = 50       SUNFLOWER_COST = 50\n  PLANT_FIRE_COOLDOWN = 120   (2 s at 60 fps)\n  PLANT_HP = 3" { class: note }
+
+  zombc: "Zombies (sw/game.h:24-32):\n  MAX_ZOMBIES = 8       ZOMBIE_HP = 3\n  ZOMBIE_SPEED_FRAMES = 3      (~20 px/s)\n  ZOMBIE_WIDTH = 32     ZOMBIE_HEIGHT = 64\n  TOTAL_ZOMBIES = 5\n  ZOMBIE_SPAWN_MIN = 8*60      ZOMBIE_SPAWN_MAX = 15*60\n  ZOMBIE_EAT_COOLDOWN = 60" { class: note }
+
+  peac: "Peas (sw/game.h:35-38):\n  MAX_PROJECTILES = 16\n  PEA_SPEED = 2 (px/frame)\n  PEA_DAMAGE = 1\n  PEA_SIZE = 8" { class: note }
+
+  sunc: "Sun (sw/game.h:41-43):\n  INITIAL_SUN = 100\n  SUN_INCREMENT = 25\n  SUN_INTERVAL = 8*60 = 480 frames" { class: note }
+}
+
+# Consumers: render.c functions
+consumers: "Consumers (sw/render.c)" {
+  class: layer
+  direction: down
+
+  r_plants: "render_plants(gs)\nsw/render.c:32-47\nwalks grid; sets bit r*8+c in pea_bits\nor sun_bits depending on plant type" { class: sw_module }
+  w_plants: "word 0  PVZ_REG_PLANTS\nword 1  PVZ_REG_SUNFLOWER" { class: register }
+
+  r_zomb: "render_zombies(gs)\nsw/render.c:55-66\npacks (alive, row, x_pixel)\nvia pvz_pack_entity" { class: sw_module }
+  w_zomb: "words 32..39\nPVZ_REG_ZOMBIE(0..7)" { class: register }
+
+  r_peas: "render_peas(gs)\nsw/render.c:68-81\ncompacts active projectiles into\n<=8 hardware pea slots" { class: sw_module }
+  w_peas: "words 40..47\nPVZ_REG_PEA(0..7)" { class: register }
+
+  r_cur: "render_cursor(gs)\nsw/render.c:83-88\npvz_pack_cursor(visible, row, col);\nvisible=0 unless STATE_PLAYING" { class: sw_module }
+  w_cur: "word 48\nPVZ_REG_CURSOR" { class: register }
+
+  r_sun: "render_sun(gs)\nsw/render.c:90-95\nwrites sun & 0x3FFF" { class: sw_module }
+  w_sun: "word 49\nPVZ_REG_SUN" { class: register }
+
+  r_sel: "render_selected(gs)\nsw/render.c:49-53\n0 for peashooter, 1 for sunflower" { class: sw_module }
+  w_sel: "word 50\nPVZ_REG_SELECTED" { class: register }
+}
+
+# Field-to-consumer wiring
+gs.f_grid    -> consumers.r_plants: "type per cell"
+gs.f_zombies -> consumers.r_zomb:   "active, row, x_pixel"
+gs.f_projs   -> consumers.r_peas:   "active, row, x_pixel"
+gs.f_cursor  -> consumers.r_cur:    "cursor_row, cursor_col"
+gs.f_state   -> consumers.r_cur:    "visible iff STATE_PLAYING" { style.stroke-dash: 3 }
+gs.f_sun     -> consumers.r_sun:    "sun"
+gs.f_sel     -> consumers.r_sel:    "selected_plant_type"
+
+# Each render_* function -> register word(s)
+consumers.r_plants -> consumers.w_plants
+consumers.r_zomb   -> consumers.w_zomb
+consumers.r_peas   -> consumers.w_peas
+consumers.r_cur    -> consumers.w_cur
+consumers.r_sun    -> consumers.w_sun
+consumers.r_sel    -> consumers.w_sel
+
+# Auxiliary fields
+aux_note: "frame_count, sun_timer, spawn_timer,\nzombies_spawned, fire_cooldown,\neat_timer, move_counter, hp\nare internal book-keeping - they are NEVER\nwritten to the FPGA register file.\nOnly the visible state above is mirrored to HW." {
+  class: note
+}
+
+title -> gs: { style.stroke-dash: 3 }
+gs -> consts: { style.stroke-dash: 3 }
+gs.f_fc -> aux_note: { style.stroke-dash: 3 }

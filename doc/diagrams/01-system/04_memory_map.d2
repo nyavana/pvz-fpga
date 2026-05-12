@@ -1,0 +1,88 @@
+# Title:     HPS memory map and pvz_top register window
+# Section:   01-system
+# Documents: hw/pvz_top.sv, hw/soc_system.qsys, sw/pvz_driver.c
+# Defends:   Where does the pvz_top register window sit in the HPS address space, what are the per-word offsets, and which slots are unsafe to write?
+# Detail:    block
+
+...@../common.d2
+
+direction: down
+
+hps_map: "HPS physical address space (32-bit)" {
+  class: layer
+
+  ddr3: "DDR3 SDRAM\n0x0000_0000 .. 0x3FFF_FFFF (1 GB)\nkernel + userspace + game heap/stack" {
+    class: hw_module
+  }
+
+  onchip_ram: "HPS on-chip RAM" {
+    class: hw_module
+  }
+
+  hps_periph: "HPS peripherals\nUART, GPIO, USB, SD/MMC, etc." {
+    class: hw_module
+  }
+
+  lw_bridge: "Lightweight HPS-to-FPGA bridge\nwindow starting at 0xFF20_0000\n(pvz_top mapped here)" {
+    class: register
+  }
+
+  ddr3 -> onchip_ram: { style.opacity: 0 }
+  onchip_ram -> hps_periph: { style.opacity: 0 }
+  hps_periph -> lw_bridge: { style.opacity: 0 }
+}
+
+pvz_window: "Lightweight bridge: pvz_top slave window\n(51 words x 4 B = 204 B; address[5:0] = byte_offset >> 2)" {
+  class: layer
+
+  w0: "0xFF20_0000 + 0x00  word 0   PVZ_PLANTS\n32 bits, bit i = peashooter at cell i (i = row*8 + col)" {
+    class: register
+  }
+
+  w1: "+ 0x04             word 1   PVZ_SUNFLOWER\n32 bits, bit i = sunflower at cell i" {
+    class: register
+  }
+
+  w_alias: "+ 0x08 .. + 0x7C  words 2..31  ALIAS RANGE\nSW MUST NOT WRITE: decoder maps these\ninto zombie slot (hw/pvz_top.sv:122)" {
+    class: register
+    style.fill: "#fee2e2"
+    style.stroke: "#b91c1c"
+  }
+
+  w_zombie: "+ 0x80 .. + 0x9C  words 32..39  PVZ_ZOMBIE[0..7]\nbit 31 = alive, [9:0] = x_pixel, [11:10] = row" {
+    class: register
+  }
+
+  w_pea: "+ 0xA0 .. + 0xBC  words 40..47  PVZ_PEA[0..7]\nsame encoding as PVZ_ZOMBIE" {
+    class: register
+  }
+
+  w48: "+ 0xC0            word 48  PVZ_CURSOR\nbit 31 = visible, [4:2] = col, [1:0] = row" {
+    class: register
+  }
+
+  w49: "+ 0xC4            word 49  PVZ_SUN\n[13:0] = sun value" {
+    class: register
+  }
+
+  w50: "+ 0xC8            word 50  PVZ_SELECTED\n[1:0] = selected plant (0=pea, 1=sunflower)" {
+    class: register
+  }
+
+  w0 -> w1: { style.opacity: 0 }
+  w1 -> w_alias: { style.opacity: 0 }
+  w_alias -> w_zombie: { style.opacity: 0 }
+  w_zombie -> w_pea: { style.opacity: 0 }
+  w_pea -> w48: { style.opacity: 0 }
+  w48 -> w49: { style.opacity: 0 }
+  w49 -> w50: { style.opacity: 0 }
+}
+
+hps_map.lw_bridge -> pvz_window: "zoom in"
+
+addr_note: "qsys addressUnits = WORDS, so software byte_offset = word_index * 4\nand HW address[5:0] = byte_offset >> 2 (hw/pvz_top.sv:24).\nKernel writes iowrite32(value, virtbase + word_index * 4) at sw/pvz_driver.c:40." { class: note }
+
+alias_note: "Words 2..31 alias into the zombie slot via `else if (address < 6'd40)`\nat hw/pvz_top.sv:122. SW MUST NOT write here - any such write would\ncorrupt zombie_alive/zombie_x/zombie_row for slot address[2:0]." { class: note }
+
+pvz_window.w_alias -> alias_note: { style.stroke-dash: 3 }
+pvz_window -> addr_note: { style.stroke-dash: 3 }

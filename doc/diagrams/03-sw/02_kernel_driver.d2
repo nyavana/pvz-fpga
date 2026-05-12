@@ -1,0 +1,124 @@
+# Title:     pvz_driver.ko - module init, probe, ioctl, exit
+# Section:   03-sw
+# Documents: sw/pvz_driver.c, sw/pvz_driver.h, sw/pvz.h
+# Defends:   What happens when pvz_driver.ko is loaded, how does a userspace ioctl reach iowrite32, and how is it unloaded?
+# Detail:    block
+
+...@../common.d2
+
+direction: down
+
+title: "pvz_driver.ko - one misc device (/dev/pvz),\none ioctl (PVZ_WRITE_REG), no IRQ.\nCompatible string: `csee4840,pvz_gpu-1.0`." {
+  class: note
+}
+
+insmod: "insmod pvz_driver.ko" { class: external }
+
+init_phase: "Module load - pvz_init" {
+  class: layer
+
+  init_fn: "pvz_init\nsw/pvz_driver.c:127\npr_info, then\nplatform_driver_probe(&pvz_driver, pvz_probe)\n(line 130)" {
+    class: kernel_module
+  }
+
+  dt_walk: "Kernel platform-device core\nwalks DT for a node whose\ncompatible matches\n`csee4840,pvz_gpu-1.0`\n(of_match table at line 111-114)" {
+    class: kernel_module
+  }
+
+  probe_fn: "pvz_probe(pdev)\nsw/pvz_driver.c:61\nruns once at insmod" {
+    class: kernel_module
+  }
+}
+
+probe_seq: "pvz_probe sequence" {
+  class: layer
+  direction: down
+
+  s1: "1. misc_register(&pvz_misc_device)\nsw/pvz_driver.c:65\n-> creates /dev/pvz with name DRIVER_NAME `pvz`" {
+    class: kernel_module
+  }
+
+  s2: "2. of_address_to_resource(pdev->dev.of_node, 0, &dev.res)\nsw/pvz_driver.c:71\n-> fills dev.res with the slave's phys range from DT\nreg = <0x???? 0xCC>  (51 words * 4 = 204 = 0xCC)" {
+    class: kernel_module
+  }
+
+  s3: "3. request_mem_region(dev.res.start,\n   resource_size(&dev.res), DRIVER_NAME)\nsw/pvz_driver.c:77\n-> reserves that physical window in /proc/iomem" {
+    class: kernel_module
+  }
+
+  s4: "4. dev.virtbase = of_iomap(pdev->dev.of_node, 0)\nsw/pvz_driver.c:83\n-> ioremap; virtbase is the kernel VA used by iowrite32" {
+    class: kernel_module
+  }
+}
+
+ioctl_path: "IOCTL data path (every render_frame word)" {
+  class: layer
+  direction: down
+
+  user_call: "Userspace: ioctl(fd, PVZ_WRITE_REG, &arg)\nsw/render.c:23\n(PVZ_WRITE_REG = _IOW('p', 1, pvz_write_arg_t),\nsw/pvz.h:74)" {
+    class: sw_module
+  }
+
+  i1: "pvz_ioctl(filp, cmd, arg)\nsw/pvz_driver.c:30\nswitch on cmd; PVZ_WRITE_REG only" {
+    class: kernel_module
+  }
+
+  i2: "copy_from_user(&w, (pvz_write_arg_t *)arg, sizeof(w))\nsw/pvz_driver.c:36\n-> returns -EACCES on fault" {
+    class: kernel_module
+  }
+
+  i3: "bounds check: w.word_index >= PVZ_NUM_REGS\nsw/pvz_driver.c:38\n-> returns -EINVAL (PVZ_NUM_REGS = 51, sw/pvz.h:49)" {
+    class: kernel_module
+  }
+
+  i4: "iowrite32(w.value,\n          dev.virtbase + (w.word_index * 4))\nsw/pvz_driver.c:40\n-> single 32-bit Avalon-MM write" {
+    class: kernel_module
+  }
+}
+
+exit_phase: "Module unload" {
+  class: layer
+  direction: down
+
+  pvz_exit: "pvz_exit\nsw/pvz_driver.c:133\nplatform_driver_unregister(&pvz_driver)" {
+    class: kernel_module
+  }
+
+  pvz_remove: "pvz_remove(pdev)\nsw/pvz_driver.c:101\n  iounmap(dev.virtbase)\n  release_mem_region(dev.res.start,\n                     resource_size(&dev.res))\n  misc_deregister(&pvz_misc_device)" {
+    class: kernel_module
+  }
+}
+
+# Wiring
+insmod -> init_phase.init_fn
+init_phase.init_fn -> init_phase.dt_walk: "platform_driver_probe"
+init_phase.dt_walk -> init_phase.probe_fn: "matched device\n(`csee4840,pvz_gpu-1.0`)"
+
+init_phase.probe_fn -> probe_seq.s1
+probe_seq.s1 -> probe_seq.s2
+probe_seq.s2 -> probe_seq.s3
+probe_seq.s3 -> probe_seq.s4
+
+ioctl_path.user_call -> ioctl_path.i1
+ioctl_path.i1 -> ioctl_path.i2
+ioctl_path.i2 -> ioctl_path.i3
+ioctl_path.i3 -> ioctl_path.i4
+
+# Probe must complete before ioctl can succeed
+probe_seq.s4 -> ioctl_path.user_call: "/dev/pvz now exists" { style.stroke-dash: 3 }
+
+# rmmod path
+rmmod: "rmmod pvz" { class: external }
+rmmod -> exit_phase.pvz_exit
+exit_phase.pvz_exit -> exit_phase.pvz_remove: "matched device removal\n(__exit_p)"
+
+probe_note: "platform_driver_probe, not platform_driver_register -\nthe driver binds to a device that already exists in DT\nat module-load time, and pvz_probe runs once at insmod.\nThere is no IRQ, no DMA, no read() handler; just one ioctl\nthat does a single iowrite32 to a memory-mapped slave." {
+  class: note
+}
+
+err_note: "Probe error paths (sw/pvz_driver.c:67-87):\n  misc_register fails        -> return ret\n  of_address_to_resource     -> -ENOENT, goto out_deregister\n  request_mem_region NULL    -> -EBUSY,  goto out_deregister\n  of_iomap NULL              -> -ENOMEM, goto out_release_mem_region" {
+  class: note
+}
+
+init_phase.init_fn -> probe_note: { style.stroke-dash: 3 }
+probe_seq -> err_note: { style.stroke-dash: 3 }

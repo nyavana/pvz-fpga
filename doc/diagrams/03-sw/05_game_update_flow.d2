@@ -1,0 +1,80 @@
+# Title:     game_update() - per-tick phase order
+# Section:   03-sw
+# Documents: sw/game.c, sw/game.h, sw/main.c
+# Defends:   In what order does game_update mutate the game state each frame, and which side-effects can each phase produce?
+# Detail:    block
+
+...@../common.d2
+
+direction: right
+
+title: "game_update(gs) runs once per main-loop iteration.\nEntry at sw/game.c:288; phase order at sw/game.c:295-301.\nKeyboard input is handled SEPARATELY by process_input in\nsw/main.c:34-68 BEFORE game_update.  game_update itself\nnever reads input." {
+  class: note
+}
+
+entry: "game_update(&gs)\nsw/game.c:288" { class: sw_module }
+
+guard: "if (gs->state != STATE_PLAYING)\n    return\nsw/game.c:290-291" { class: sw_module }
+
+tick: "gs->frame_count++\nsw/game.c:293" { class: sw_module }
+
+p1: "1. update_sun(gs)\nsw/game.c:265-272\n  sun_timer-- ; if <= 0:\n    sun += SUN_INCREMENT * (1 + #sunflowers)\n    sun_timer = SUN_INTERVAL (= 480 frames)" {
+  class: sw_module
+}
+
+p2: "2. update_spawning(gs)\nsw/game.c:228-251\n  if zombies_spawned >= TOTAL_ZOMBIES return;\n  spawn_timer-- ; if <= 0:\n    pick free zombies[i] slot, init\n    (active=1, row=rand, x_pixel=SCREEN_W-1,\n     hp=ZOMBIE_HP, move_counter=0, eating=0)\n    zombies_spawned++\n    spawn_timer = random in [8*60, 15*60]" {
+  class: sw_module
+}
+
+p3: "3. update_firing(gs)\nsw/game.c:175-192\n  for each cell with PLANT_PEASHOOTER:\n    if fire_cooldown > 0: fire_cooldown--\n    if fire_cooldown == 0 AND zombie in row:\n      spawn_pea(gs, r, c)\n      fire_cooldown = PLANT_FIRE_COOLDOWN (= 120)" {
+  class: sw_module
+}
+
+p4: "4. update_projectiles(gs)\nsw/game.c:159-172\n  for each active projectile:\n    p->x_pixel += PEA_SPEED (= 2)\n    if x_pixel > SCREEN_W: p->active = 0" {
+  class: sw_module
+}
+
+p5: "5. update_zombies(gs)\nsw/game.c:103-156\n  for each active zombie z:\n    if z->eating: damage plant on eat_timer,\n      drop eating when plant gone or destroyed\n    else: z->move_counter++ ;\n      every ZOMBIE_SPEED_FRAMES (= 3): z->x_pixel--\n      if x_pixel <= GAME_AREA_X: state = STATE_LOSE\n      else if grid cell has plant: enter eating mode" {
+  class: sw_module
+}
+
+p6: "6. check_collisions(gs)\nsw/game.c:195-225\n  for each active pea p:\n    for each active zombie z in same row:\n      bbox test (PEA_SIZE=8, ZOMBIE_WIDTH=32)\n      on overlap: z->hp -= PEA_DAMAGE (= 1) ;\n        p->active = 0 ;\n        if z->hp <= 0: z->active = 0\n        break (one zombie per pea)" {
+  class: sw_module
+}
+
+p7: "7. check_win(gs)\nsw/game.c:275-286\n  if zombies_spawned < TOTAL_ZOMBIES: return\n  if any zombies[i].active: return\n  gs->state = STATE_WIN" {
+  class: sw_module
+}
+
+ret: "return\n(control returns to main loop in sw/main.c:119)" { class: sw_module }
+
+entry -> guard
+guard -> tick: "state == STATE_PLAYING"
+tick -> p1
+p1 -> p2
+p2 -> p3
+p3 -> p4
+p4 -> p5
+p5 -> p6
+p6 -> p7
+p7 -> ret
+
+# Side-effect annotations
+side_p5: "Side effect: p5 may set\ngs->state = STATE_LOSE\n(sw/game.c:144) and early-return." { class: note }
+side_p7: "Side effect: p7 may set\ngs->state = STATE_WIN\n(sw/game.c:285)." { class: note }
+
+p5 -> side_p5: { style.stroke-dash: 3 }
+p7 -> side_p7: { style.stroke-dash: 3 }
+
+# Reads-only edges from main loop
+input_note: "Input is read BEFORE game_update:\nsw/main.c:114 process_input(&gs) drains the\nINPUT_* queue and mutates cursor / plants /\nselected_plant_type / state directly.\ngame_update never touches /dev/input/eventN." {
+  class: note
+}
+
+render_note: "render_frame(&gs) is called AFTER game_update\nat sw/main.c:122 - it is read-only over\ngame_state and writes to the FPGA register file." {
+  class: note
+}
+
+title -> entry: { style.stroke-dash: 3 }
+entry -> input_note: { style.stroke-dash: 3 }
+ret -> render_note: { style.stroke-dash: 3 }

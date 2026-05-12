@@ -1,0 +1,76 @@
+# Title:     Device-tree binding flow: qsys to DTB to driver match
+# Section:   04-interface
+# Documents: hw/pvz_top_hw.tcl, hw/soc_system.qsys, sw/pvz_driver.c
+# Defends:   How does the FPGA's qsys description end up matching the kernel driver, and why does `csee4840,pvz_gpu-1.0` appear in three places?
+# Detail:    block
+
+...@../common.d2
+
+direction: right
+
+title: "Device-tree binding flow\nqsys description --> DTB --> kernel match --> probe\nSingle point of agreement: the `compatible` string." {
+  class: note
+}
+
+hw_tcl: "hw/pvz_top_hw.tcl\nqsys component descriptor\nset_module_assignment\n  embeddedsw.dts.compatible\n  \"csee4840,pvz_gpu-1.0\"\n  (line 23)" {
+  class: hw_module
+}
+
+qsys_file: "hw/soc_system.qsys\ninstantiates pvz_top_0\nconnects hps_0.h2f_lw_axi_master\n  --> pvz_top_0.s1\n(lines 606-615)" {
+  class: hw_module
+}
+
+gen: "qsys generation\nemits soc_system.sopcinfo" {
+  class: hw_module
+}
+
+sopc2dts: "sopc2dts (Altera tool)\nsopcinfo --> soc_system.dts" {
+  class: hw_module
+}
+
+dtc: "dtc (device tree compiler)\nsoc_system.dts --> soc_system.dtb" {
+  class: hw_module
+}
+
+sdcard: "SD card / boot media\ncarries soc_system.rbf\n+ soc_system.dtb" {
+  class: external
+}
+
+uboot: "U-Boot at cold boot\nfdt addr <addr>\nloads DTB into RAM,\nhands address to Linux" {
+  class: sw_module
+}
+
+kernel_walk: "Linux kernel boot\nwalks the device tree;\nfinds a node with\ncompatible = \"csee4840,pvz_gpu-1.0\"" {
+  class: sw_module
+}
+
+driver_table: "pvz_driver.ko\nstatic of_device_id pvz_of_match[] = {\n  { .compatible = \"csee4840,pvz_gpu-1.0\" },\n  {},\n};\n(sw/pvz_driver.c:111-114)" {
+  class: kernel_module
+}
+
+probe: "Kernel invokes pvz_probe(pdev)\nwith the matched DT node:\nmisc_register -> of_address_to_resource\n  -> request_mem_region -> of_iomap\n(sw/pvz_driver.c:61-99)" {
+  class: kernel_module
+}
+
+compat_bus: "compatible string\n\"csee4840,pvz_gpu-1.0\"" {
+  class: bus
+}
+
+agreement_note: "The compatible string is the SINGLE point\nof agreement between the FPGA bitstream's\nqsys description, the kernel's DTB, and the\ndriver source. A typo here means the driver\nloads but never probes (no match, silent fail)." {
+  class: note
+}
+
+hw_tcl -> qsys_file: "referenced by\nsoc_system.qsys"
+qsys_file -> gen: "qsys-generate"
+gen -> sopc2dts: ".sopcinfo"
+sopc2dts -> dtc: ".dts"
+dtc -> sdcard: ".dtb"
+sdcard -> uboot: "fatload mmc 0:1\nsoc_system.dtb"
+uboot -> kernel_walk: "fdt addr;\nbootz/bootm with DTB"
+kernel_walk -> driver_table: "match attempt"
+driver_table -> probe: "match hit --> probe"
+
+driver_table -> compat_bus: { style.stroke-dash: 3 }
+kernel_walk -> compat_bus: { style.stroke-dash: 3 }
+hw_tcl -> compat_bus: { style.stroke-dash: 3 }
+compat_bus -> agreement_note: { style.stroke-dash: 3 }

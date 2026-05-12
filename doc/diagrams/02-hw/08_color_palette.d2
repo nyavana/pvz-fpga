@@ -1,0 +1,52 @@
+# Title:     color_palette — 8-bit index to 24-bit RGB
+# Section:   02-hw
+# Documents: hw/color_palette.sv, hw/entity_drawer.sv, hw/pvz_top.sv
+# Defends:   How does the 8-bit color index produced by entity_drawer become the 24-bit RGB driven onto the VGA pins?
+# Detail:    block
+
+...@../common.d2
+
+direction: right
+
+color_palette: "color_palette\n(hw/color_palette.sv)\n256-entry LUT, combinational.\nalways_comb / case (index) at\ncolor_palette.sv:31-49.\nDefault arm returns black." {
+  class: hw_module
+
+  lut: "case (index)\n(color_palette.sv:32-48)\n13 named entries defined,\nremaining 243 fall through\nthe default arm to black." {
+    class: signal
+  }
+}
+
+idx_in: "index[7:0]\n= entity_drawer.color_out\n(pvz_top.sv:237)" { class: signal }
+
+r_out: "r[7:0]" { class: signal }
+g_out: "g[7:0]" { class: signal }
+b_out: "b[7:0]" { class: signal }
+
+idx_in -> color_palette.lut: "selector"
+color_palette.lut -> r_out: "r byte"
+color_palette.lut -> g_out: "g byte"
+color_palette.lut -> b_out: "b byte"
+
+# Stylized table of the entries actually used by the design.
+# RGB values come from color_palette.sv lines 33-46 verbatim.
+entries: "Palette entries used by the design\n(RGB values from color_palette.sv:33-46)\n\nidx  name           R    G    B    used for\n---  ------------   --   --   --   ---------------------------\n 0   Black          00   00   00   default / blanking\n 1   Dark Green     1B   5E   20   bg_grid dark cell\n 2   Light Green    2D   8B   2D   bg_grid light cell\n 3   Brown          8B   45   13   sprite soil / stem\n 4   Yellow         FF   D7   00   COL_YELLOW (cursor, sun HUD,\n                                   selector border)\n 5   Red            FF   00   00   zombie body\n 6   Dark Red       8B   00   00   zombie head\n 7   Green          00   80   00   COL_GREEN (peashooter fill +\n                                   selector box 0 fill)\n 8   Dark Green 2   00   64   00   peashooter stem\n 9   Bright Green   00   FF   00   COL_BRIGHT_GREEN (pea projectile)\n10   White          FF   FF   FF   HUD digits\n11   Gray           80   80   80   HUD background\n12   Orange         FF   A5   00   COL_ORANGE (selector box 1 fill)\n13   Sky Blue       87   CE   EB   bg_grid outside-grid fill" {
+  class: register
+}
+
+# Named indices that entity_drawer references by localparam
+named_indices: "Named indices used by entity_drawer\n(entity_drawer.sv:85-89)\nCOL_YELLOW       = 8'd4\nCOL_GREEN        = 8'd7\nCOL_BRIGHT_GREEN = 8'd9\nCOL_ORANGE       = 8'd12\nCOL_TRANSPARENT  = 8'hFF  (sentinel, NOT a real palette entry)" {
+  class: note
+}
+
+transparent_note: "Index 0xFF is reserved by entity_drawer as the\ntransparent sentinel; sprite_rom returns 0xFF\nfor pixels that should not be drawn, and the\nstage-2 mux skips that layer.  The palette entry\nat 0xFF falls through to the default arm of the\ncase, so it reads as black — but the drawer\nnever lets that value reach this module." {
+  class: note
+}
+
+blanking_note: "Outside the active 640x480 window pvz_top\nforces VGA_R/G/B to 0 regardless of palette\noutput (pvz_top.sv:243-253), so this LUT is\nonly visible during the active scan." {
+  class: note
+}
+
+color_palette -> entries: { style.stroke-dash: 3 }
+color_palette -> named_indices: { style.stroke-dash: 3 }
+idx_in -> transparent_note: { style.stroke-dash: 3 }
+r_out -> blanking_note: { style.stroke-dash: 3 }

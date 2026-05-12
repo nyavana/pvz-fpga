@@ -1,0 +1,48 @@
+# Title:     System context
+# Section:   01-system
+# Documents: sw/main.c, sw/pvz_driver.c, sw/input.c, hw/pvz_top.sv, hw/soc_system_top.sv
+# Defends:   What boxes does the project span, and how does input/output enter and leave the DE1-SoC?
+# Detail:    block
+
+...@../common.d2
+
+direction: right
+
+user: User\n(keyboard + monitor) { class: external }
+keyboard: USB keyboard\n/dev/input/eventN { class: external }
+monitor: VGA monitor\n640x480 @ 60 Hz { class: external }
+host: Serial-console host PC\nscreen /dev/ttyUSB0 115200 { class: external }
+
+de1_soc: DE1-SoC (Cyclone V) {
+  class: layer
+
+  hps: HPS (ARM Cortex-A9, Linux) {
+    class: layer
+
+    pvz_app: pvz userspace\n(sw/main.c -> game.c, render.c, input.c) {
+      class: sw_module
+    }
+
+    driver: pvz_driver.ko\n(sw/pvz_driver.c, misc device /dev/pvz) {
+      class: kernel_module
+    }
+  }
+
+  fpga: FPGA fabric {
+    class: layer
+    pvz_top: pvz_top\n(hw/pvz_top.sv, Avalon-MM slave + VGA conduit) {
+      class: hw_module
+    }
+  }
+}
+
+user -> keyboard: keystrokes
+user -> monitor: watches
+host -> de1_soc.hps: HPS UART /dev/ttyUSB0\n(console, mini-USB)
+
+keyboard -> de1_soc.hps.pvz_app: evdev events\nread(/dev/input/eventN)
+de1_soc.hps.pvz_app -> de1_soc.hps.driver: ioctl(PVZ_WRITE_REG)\non /dev/pvz
+de1_soc.hps.driver -> de1_soc.fpga.pvz_top: Avalon-MM write\n(lightweight HPS-to-FPGA bridge,\nbase 0xff200000)
+de1_soc.fpga.pvz_top -> monitor: "VGA_R/G/B[7:0],\nVGA_HS, VGA_VS, VGA_CLK"
+
+scope_note: "Audio (Wolfson codec) and the USB gamepad are out of scope on this branch.\nInput is the working USB keyboard via evdev; output is VGA only." { class: note }

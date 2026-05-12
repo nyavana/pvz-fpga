@@ -1,0 +1,76 @@
+# Title:     Pea-zombie collision flow
+# Section:   06-flow
+# Documents: sw/game.c, sw/game.h, sw/render.c, hw/pvz_top.sv, hw/entity_drawer.sv
+# Defends:   How does a pea hit, damage, and despawn a zombie?
+# Detail:    block
+
+...@../common.d2
+
+direction: right
+
+advance: "Step 1: update_projectiles (sw/game.c:159-172)" {
+  class: layer
+
+  loop: "for each active projectile p:\n  p->x_pixel += PEA_SPEED (2 px/frame)\n  if (p->x_pixel > SCREEN_W)\n    p->active = 0  // off-screen" { class: sw_module }
+}
+
+iterate: "Step 2: check_collisions (sw/game.c:195-225)" {
+  class: layer
+
+  outer: "for each active pea p in p->row" { class: sw_module }
+  inner: "for each active zombie z\nwith z->row == p->row" { class: sw_module }
+
+  outer -> inner: "same-row pairs"
+}
+
+bbox: "Step 3: bounding-box test (sw/game.c:208-213)" {
+  class: layer
+
+  calc: "z_left  = z->x_pixel\nz_right = z->x_pixel + ZOMBIE_WIDTH (32)\np_left  = p->x_pixel\np_right = p->x_pixel + PEA_SIZE (8)" { class: signal }
+
+  test: "p_right >= z_left\n  &&\np_left <= z_right ?" { class: fsm_state }
+
+  miss: "no hit:\ncontinue to next zombie" { class: note }
+
+  calc -> test
+  test -> miss: "no" { style.stroke-dash: 3 }
+}
+
+hit: "Step 4: hit handler (sw/game.c:213-222)" {
+  class: layer
+
+  damage: "z->hp -= PEA_DAMAGE (1)\np->active = 0  // pea consumed\nbreak  // pea hits only one zombie" { class: sw_module }
+
+  kill_check: "z->hp <= 0 ?" { class: fsm_state }
+  kill: "z->active = 0\n(zombie dies)" { class: sw_module }
+  survives: "zombie keeps moving\nat ZOMBIE_SPEED_FRAMES (3)\nframes / pixel" { class: note }
+
+  damage -> kill_check
+  kill_check -> kill: "yes"
+  kill_check -> survives: "no" { style.stroke-dash: 3 }
+}
+
+render: "Step 5: render_frame writes refreshed words" {
+  class: layer
+
+  rebuild: "render_zombies (sw/render.c:55-66)\n  word 32+i <= pvz_pack_entity(alive, row, x)\nrender_peas (sw/render.c:68-81)\n  word 40+slot <= pvz_pack_entity(...)\n  unused pea slots cleared to 0" { class: sw_module }
+}
+
+fpga: "Step 6: FPGA stops drawing the cleared entity" {
+  class: layer
+
+  regfile: "pvz_top regfile\nzombie_alive[i] / pea_alive[i]\n(hw/pvz_top.sv:122-132)" { class: hw_module }
+  drawer: "entity_drawer skips entities\nwhose alive bit is low\n(hw/entity_drawer.sv)" { class: hw_module }
+}
+
+advance.loop -> iterate.outer
+iterate.inner -> bbox.calc
+bbox.test -> hit.damage: "yes"
+hit.kill -> render.rebuild: "next frame"
+hit.survives -> render.rebuild: "next frame" { style.stroke-dash: 3 }
+render.rebuild -> fpga.regfile
+fpga.regfile -> fpga.drawer
+
+note_constants: "Constants (sw/game.h):\n  PEA_SPEED     = 2 px/frame\n  PEA_DAMAGE    = 1\n  PEA_SIZE      = 8 px\n  ZOMBIE_HP     = 3\n  ZOMBIE_WIDTH  = 32 px\n  ZOMBIE_HEIGHT = 64 px" { class: note }
+
+advance -> note_constants: { style.stroke-dash: 3 }
