@@ -8,6 +8,9 @@
 /docs/superpowers/
 /openspec/
 
+# Prior team's reference project — kept locally, not tracked in repo
+/doc/reference-design/bubble-bobble/
+
 # OS junk
 .DS_Store
 Thumbs.db
