@@ -1,0 +1,279 @@
+# Title:     entity_drawer datapath (signal-level, bit-widths)
+# Section:   02-hw
+# Documents: hw/entity_drawer.sv (ports 28-80, constants 85-120, unpack 122-138, stage-1 hits 140-280, stage-1 flops 297-325, stage-2 mux 330-358), hw/sprite_rom.sv, hw/bg_grid.sv
+# Defends:   What is the exact bit-width of every wire and register in entity_drawer, and which combinational hits feed which layer of the final mux?
+# Detail:    signal
+
+...@../common.d2
+
+direction: right
+
+# ---------------------------------------------------------------
+# Top-level entity_drawer module boundary
+# ---------------------------------------------------------------
+drawer: "entity_drawer  (hw/entity_drawer.sv)" {
+  class: hw_module
+  direction: right
+
+  # =============================================================
+  # Input ports (hw/entity_drawer.sv:28-80)
+  # =============================================================
+  inputs: "Input ports (lines 28-80)" {
+    class: layer
+    direction: down
+
+    clk:                "clk  (1)"                                  { class: signal }
+    reset:              "reset  (1)"                                { class: signal }
+    px:                 "px[9:0]"                                   { class: signal }
+    py:                 "py[9:0]"                                   { class: signal }
+    bg_color:           "bg_color[7:0]"                             { class: signal }
+    plant_present:      "plant_present[31:0]"                       { class: signal }
+    sunflower_present:  "sunflower_present[31:0]"                   { class: signal }
+    selected_plant:     "selected_plant[1:0]"                       { class: signal }
+    zombie_alive:       "zombie_alive[7:0]"                         { class: signal }
+    zombie_x_packed:    "zombie_x_packed[79:0]\n{zombie_x[7],...,zombie_x[0]}"   { class: signal }
+    zombie_row_packed:  "zombie_row_packed[15:0]\n{zombie_row[7],...,zombie_row[0]}" { class: signal }
+    pea_alive:          "pea_alive[7:0]"                            { class: signal }
+    pea_x_packed:       "pea_x_packed[79:0]"                        { class: signal }
+    pea_row_packed:     "pea_row_packed[15:0]"                      { class: signal }
+    cursor_visible:     "cursor_visible  (1)"                       { class: signal }
+    cursor_col:         "cursor_col[2:0]"                           { class: signal }
+    cursor_row:         "cursor_row[1:0]"                           { class: signal }
+    sun_value:          "sun_value[13:0]"                           { class: signal }
+    plant_rd_pixel:     "plant_rd_pixel[7:0]\n(from plant ROM)"     { class: signal }
+    sunflower_rd_pixel: "sunflower_rd_pixel[7:0]\n(from sunflower ROM)" { class: signal }
+    zombie_rd_pixel:    "zombie_rd_pixel[7:0]\n(from zombie ROM)"   { class: signal }
+  }
+
+  # =============================================================
+  # Unpacked arrays via genvar loop (lines 130-138)
+  # =============================================================
+  unpack: "Unpack generate block (lines 130-138)" {
+    class: layer
+    direction: down
+
+    zx_arr:  "zombie_x[0:7]    each [9:0]" { class: signal }
+    zr_arr:  "zombie_row[0:7]  each [1:0]" { class: signal }
+    px_arr:  "pea_x[0:7]       each [9:0]" { class: signal }
+    pr_arr:  "pea_row[0:7]     each [1:0]" { class: signal }
+  }
+
+  # =============================================================
+  # Stage 1: grid-cell math + plant ROM address (lines 140-166)
+  # =============================================================
+  stage1_cell: "Stage 1: grid cell + plant ROM address" {
+    class: layer
+    direction: down
+
+    in_grid_x: "in_grid_x = (px >= GRID_X) && (px < GRID_X + 10'd512)  (1)" { class: signal }
+    in_grid_y: "in_grid_y = (py >= GRID_Y) && (py < GRID_Y + 10'd256)  (1)" { class: signal }
+    in_grid:   "in_grid = in_grid_x && in_grid_y  (1)"                       { class: signal }
+    gx:        "gx[9:0] = px - GRID_X"                                       { class: signal }
+    gy:        "gy[9:0] = py - GRID_Y"                                       { class: signal }
+    cell_col:  "cell_col[2:0] = gx[8:6]"                                     { class: signal }
+    cell_row:  "cell_row[1:0] = gy[7:6]"                                     { class: signal }
+    in_cell_x: "in_cell_x[5:0] = gx[5:0]"                                    { class: signal }
+    in_cell_y: "in_cell_y[5:0] = gy[5:0]"                                    { class: signal }
+    plant_idx: "plant_idx[4:0] = {cell_row[1:0], cell_col[2:0]}"             { class: signal }
+    plant_here:     "plant_here     = in_grid && plant_present[plant_idx]  (1)"     { class: signal }
+    sunflower_here: "sunflower_here = in_grid && sunflower_present[plant_idx]  (1)" { class: signal }
+    plant_rd_addr_out: "plant_rd_addr[11:0] = {in_cell_y[5:0], in_cell_x[5:0]}\n(output port, also drives sunflower ROM addr)" { class: signal }
+  }
+
+  # =============================================================
+  # Stage 1: zombie priority encoder (lines 173-194)
+  # =============================================================
+  stage1_zombie: "Stage 1: zombie hit (priority encoder, i=0..7)" {
+    class: layer
+    direction: down
+
+    zombie_hit_comb:   "zombie_hit_comb  (1)\n(first alive zombie covering pixel wins)" { class: signal }
+    zombie_in_x:       "zombie_in_x[5:0] = (px - zombie_x[i])[5:0]"                     { class: signal }
+    zombie_in_y:       "zombie_in_y[5:0] = (py - zy_top)[5:0]"                          { class: signal }
+    zombie_rd_addr_out: "zombie_rd_addr[11:0] = {zombie_in_y[5:0], zombie_in_x[5:0]}\n(output port)" { class: signal }
+  }
+
+  # =============================================================
+  # Stage 1: other combinational hits (lines 199-280)
+  # =============================================================
+  stage1_other: "Stage 1: pea, cursor, sun, selector hits (combinational)" {
+    class: layer
+    direction: down
+
+    pea_hit_comb:     "pea_hit_comb  (1)\n(any of 8 peas, PEA_SIZE x PEA_SIZE at row*64+28)" { class: signal }
+    cursor_hit_comb:  "cursor_hit_comb  (1)\n(hollow border of CURSOR_BORDER px around cursor cell)" { class: signal }
+    sun_hit_comb:     "sun_hit_comb  (1)\n(10 HUD blocks, lit when sun_value >= (i+1)*50)" { class: signal }
+    sel0_hit_comb:    "sel0_hit_comb  (1)\n(inside peashooter icon box)"     { class: signal }
+    sel0_border_comb: "sel0_border_comb  (1)\n(on peashooter icon border)"   { class: signal }
+    sel1_hit_comb:    "sel1_hit_comb  (1)\n(inside sunflower icon box)"      { class: signal }
+    sel1_border_comb: "sel1_border_comb  (1)\n(on sunflower icon border)"    { class: signal }
+  }
+
+  # =============================================================
+  # Stage-1 register bank — always_ff at line 297
+  # =============================================================
+  stage1_flops: "Stage 1 -> Stage 2 register bank\nalways_ff @(posedge clk or posedge reset)  (line 297)\nreset values: all flops <- 0; selected_plant_d <- 2'd0\nclock-enable: always (every clk)" {
+    class: layer
+    direction: down
+
+    bg_color_d:        "bg_color_d[7:0]"                  { class: register }
+    plant_here_d:      "plant_here_d  (1)"                { class: register }
+    sunflower_here_d:  "sunflower_here_d  (1)"            { class: register }
+    zombie_hit_d:      "zombie_hit_d  (1)"                { class: register }
+    pea_hit_d:         "pea_hit_d  (1)"                   { class: register }
+    cursor_hit_d:      "cursor_hit_d  (1)"                { class: register }
+    sun_hit_d:         "sun_hit_d  (1)"                   { class: register }
+    sel0_hit_d:        "sel0_hit_d  (1)"                  { class: register }
+    sel0_border_d:     "sel0_border_d  (1)"               { class: register }
+    sel1_hit_d:        "sel1_hit_d  (1)"                  { class: register }
+    sel1_border_d:     "sel1_border_d  (1)"               { class: register }
+    selected_plant_d:  "selected_plant_d[1:0]"            { class: register }
+  }
+
+  # =============================================================
+  # Stage 2: combinational layer mux — always_comb at line 330
+  # =============================================================
+  stage2_mux: "Stage 2: combinational layer mux\nalways_comb at hw/entity_drawer.sv:330\n(paints layers bottom -> top; later overrides earlier)" {
+    class: layer
+    direction: down
+
+    layer0: "1. color_out = bg_color_d                                                 [default, line 331]"  { class: signal }
+    layer1: "2. plant_here_d && plant_rd_pixel != COL_TRANSPARENT       -> plant_rd_pixel[7:0]      [line 332]" { class: signal }
+    layer2: "3. sunflower_here_d && sunflower_rd_pixel != COL_TRANSPARENT -> sunflower_rd_pixel[7:0] [line 334]" { class: signal }
+    layer3: "4. pea_hit_d                                                -> COL_BRIGHT_GREEN (8'd9) [line 336]" { class: signal }
+    layer4: "5. zombie_hit_d && zombie_rd_pixel != COL_TRANSPARENT       -> zombie_rd_pixel[7:0]    [line 338]" { class: signal }
+    layer5: "6. cursor_hit_d                                             -> COL_YELLOW (8'd4)       [line 340]" { class: signal }
+    layer6: "7. sun_hit_d                                                -> COL_YELLOW (8'd4)       [line 342]" { class: signal }
+    layer7: "8. sel0_hit_d                                               -> COL_GREEN (8'd7)        [line 347]" { class: signal }
+    layer8: "9. sel1_hit_d                                               -> COL_ORANGE (8'd12)      [line 349]" { class: signal }
+    layer9: "10. sel0_border_d && selected_plant_d == 2'd0               -> COL_YELLOW (8'd4)       [line 354]" { class: signal }
+    layerA: "11. sel1_border_d && selected_plant_d == 2'd1               -> COL_YELLOW (8'd4)       [line 356]" { class: signal }
+  }
+
+  # =============================================================
+  # Outputs
+  # =============================================================
+  outputs: "Output ports" {
+    class: layer
+    direction: down
+
+    plant_rd_addr_port:  "plant_rd_addr[11:0]\n(also feeds sunflower ROM)" { class: signal }
+    zombie_rd_addr_port: "zombie_rd_addr[11:0]"                            { class: signal }
+    color_out_port:      "color_out[7:0]"                                  { class: signal }
+  }
+}
+
+# ---------------------------------------------------------------
+# Inter-region wiring
+# ---------------------------------------------------------------
+
+# Unpack: packed buses -> indexable arrays
+drawer.inputs.zombie_x_packed   -> drawer.unpack.zx_arr: "zombie_x_packed[gi*10 +: 10]\n8 x 10b"
+drawer.inputs.zombie_row_packed -> drawer.unpack.zr_arr: "zombie_row_packed[gi*2 +: 2]\n8 x 2b"
+drawer.inputs.pea_x_packed      -> drawer.unpack.px_arr: "pea_x_packed[gi*10 +: 10]\n8 x 10b"
+drawer.inputs.pea_row_packed    -> drawer.unpack.pr_arr: "pea_row_packed[gi*2 +: 2]\n8 x 2b"
+
+# Stage-1 cell math
+drawer.inputs.px -> drawer.stage1_cell.in_grid_x: "[9:0]"
+drawer.inputs.px -> drawer.stage1_cell.gx:        "[9:0]"
+drawer.inputs.py -> drawer.stage1_cell.in_grid_y: "[9:0]"
+drawer.inputs.py -> drawer.stage1_cell.gy:        "[9:0]"
+drawer.stage1_cell.gx        -> drawer.stage1_cell.cell_col:  "gx[8:6] -> [2:0]"
+drawer.stage1_cell.gy        -> drawer.stage1_cell.cell_row:  "gy[7:6] -> [1:0]"
+drawer.stage1_cell.gx        -> drawer.stage1_cell.in_cell_x: "gx[5:0] -> [5:0]"
+drawer.stage1_cell.gy        -> drawer.stage1_cell.in_cell_y: "gy[5:0] -> [5:0]"
+drawer.stage1_cell.cell_col  -> drawer.stage1_cell.plant_idx: "{cell_row[1:0], cell_col[2:0]} -> [4:0]"
+drawer.stage1_cell.cell_row  -> drawer.stage1_cell.plant_idx
+drawer.inputs.plant_present     -> drawer.stage1_cell.plant_here:     "plant_present[plant_idx]"
+drawer.inputs.sunflower_present -> drawer.stage1_cell.sunflower_here: "sunflower_present[plant_idx]"
+drawer.stage1_cell.in_grid_x -> drawer.stage1_cell.in_grid
+drawer.stage1_cell.in_grid_y -> drawer.stage1_cell.in_grid
+drawer.stage1_cell.in_cell_x -> drawer.stage1_cell.plant_rd_addr_out: "{in_cell_y[5:0], in_cell_x[5:0]} -> [11:0]"
+drawer.stage1_cell.in_cell_y -> drawer.stage1_cell.plant_rd_addr_out
+
+# Zombie priority encoder
+drawer.unpack.zx_arr           -> drawer.stage1_zombie.zombie_hit_comb: "zombie_x[i] (10b)"
+drawer.unpack.zr_arr           -> drawer.stage1_zombie.zombie_hit_comb: "zombie_row[i] (2b)"
+drawer.inputs.zombie_alive     -> drawer.stage1_zombie.zombie_hit_comb: "[7:0]"
+drawer.inputs.px               -> drawer.stage1_zombie.zombie_in_x:     "px[9:0]"
+drawer.inputs.py               -> drawer.stage1_zombie.zombie_in_y:     "py[9:0]"
+drawer.stage1_zombie.zombie_in_x -> drawer.stage1_zombie.zombie_rd_addr_out: "[5:0]"
+drawer.stage1_zombie.zombie_in_y -> drawer.stage1_zombie.zombie_rd_addr_out: "[5:0]"
+
+# Stage-1 other hits
+drawer.unpack.px_arr           -> drawer.stage1_other.pea_hit_comb:    "pea_x[i] (10b)"
+drawer.unpack.pr_arr           -> drawer.stage1_other.pea_hit_comb:    "pea_row[i] (2b)"
+drawer.inputs.pea_alive        -> drawer.stage1_other.pea_hit_comb:    "[7:0]"
+drawer.inputs.cursor_visible   -> drawer.stage1_other.cursor_hit_comb: "(1)"
+drawer.inputs.cursor_col       -> drawer.stage1_other.cursor_hit_comb: "[2:0]"
+drawer.inputs.cursor_row       -> drawer.stage1_other.cursor_hit_comb: "[1:0]"
+drawer.inputs.sun_value        -> drawer.stage1_other.sun_hit_comb:    "[13:0]"
+
+# Stage-1 -> stage-1 register bank (the always_ff at line 297)
+drawer.inputs.bg_color                 -> drawer.stage1_flops.bg_color_d:       "[7:0]"
+drawer.stage1_cell.plant_here          -> drawer.stage1_flops.plant_here_d:     "(1)"
+drawer.stage1_cell.sunflower_here      -> drawer.stage1_flops.sunflower_here_d: "(1)"
+drawer.stage1_zombie.zombie_hit_comb   -> drawer.stage1_flops.zombie_hit_d:     "(1)"
+drawer.stage1_other.pea_hit_comb       -> drawer.stage1_flops.pea_hit_d:        "(1)"
+drawer.stage1_other.cursor_hit_comb    -> drawer.stage1_flops.cursor_hit_d:     "(1)"
+drawer.stage1_other.sun_hit_comb       -> drawer.stage1_flops.sun_hit_d:        "(1)"
+drawer.stage1_other.sel0_hit_comb      -> drawer.stage1_flops.sel0_hit_d:       "(1)"
+drawer.stage1_other.sel0_border_comb   -> drawer.stage1_flops.sel0_border_d:    "(1)"
+drawer.stage1_other.sel1_hit_comb      -> drawer.stage1_flops.sel1_hit_d:       "(1)"
+drawer.stage1_other.sel1_border_comb   -> drawer.stage1_flops.sel1_border_d:    "(1)"
+drawer.inputs.selected_plant           -> drawer.stage1_flops.selected_plant_d: "[1:0]"
+
+# Stage-1 flops -> stage-2 mux (registered hits drive the mux conditions)
+drawer.stage1_flops.bg_color_d       -> drawer.stage2_mux.layer0: "[7:0]"
+drawer.stage1_flops.plant_here_d     -> drawer.stage2_mux.layer1: "(1)"
+drawer.stage1_flops.sunflower_here_d -> drawer.stage2_mux.layer2: "(1)"
+drawer.stage1_flops.pea_hit_d        -> drawer.stage2_mux.layer3: "(1)"
+drawer.stage1_flops.zombie_hit_d     -> drawer.stage2_mux.layer4: "(1)"
+drawer.stage1_flops.cursor_hit_d     -> drawer.stage2_mux.layer5: "(1)"
+drawer.stage1_flops.sun_hit_d        -> drawer.stage2_mux.layer6: "(1)"
+drawer.stage1_flops.sel0_hit_d       -> drawer.stage2_mux.layer7: "(1)"
+drawer.stage1_flops.sel1_hit_d       -> drawer.stage2_mux.layer8: "(1)"
+drawer.stage1_flops.sel0_border_d    -> drawer.stage2_mux.layer9: "(1)"
+drawer.stage1_flops.sel1_border_d    -> drawer.stage2_mux.layerA: "(1)"
+drawer.stage1_flops.selected_plant_d -> drawer.stage2_mux.layer9: "selected_plant_d == 2'd0"
+drawer.stage1_flops.selected_plant_d -> drawer.stage2_mux.layerA: "selected_plant_d == 2'd1"
+
+# Sprite ROM pixels arrive at stage 2 (same cycle as registered hits;
+# the 1-cycle ROM read latency consumes one clock between stage-1
+# address issue and stage-2 pixel use).
+drawer.inputs.plant_rd_pixel     -> drawer.stage2_mux.layer1: "[7:0] (compared to COL_TRANSPARENT = 8'hFF)"
+drawer.inputs.sunflower_rd_pixel -> drawer.stage2_mux.layer2: "[7:0] (compared to COL_TRANSPARENT = 8'hFF)"
+drawer.inputs.zombie_rd_pixel    -> drawer.stage2_mux.layer4: "[7:0] (compared to COL_TRANSPARENT = 8'hFF)"
+
+# Outputs leave the module
+drawer.stage1_cell.plant_rd_addr_out    -> drawer.outputs.plant_rd_addr_port:  "[11:0]"
+drawer.stage1_zombie.zombie_rd_addr_out -> drawer.outputs.zombie_rd_addr_port: "[11:0]"
+drawer.stage2_mux.layer0 -> drawer.outputs.color_out_port: "color_out[7:0]"
+drawer.stage2_mux.layer1 -> drawer.outputs.color_out_port
+drawer.stage2_mux.layer2 -> drawer.outputs.color_out_port
+drawer.stage2_mux.layer3 -> drawer.outputs.color_out_port
+drawer.stage2_mux.layer4 -> drawer.outputs.color_out_port
+drawer.stage2_mux.layer5 -> drawer.outputs.color_out_port
+drawer.stage2_mux.layer6 -> drawer.outputs.color_out_port
+drawer.stage2_mux.layer7 -> drawer.outputs.color_out_port
+drawer.stage2_mux.layer8 -> drawer.outputs.color_out_port
+drawer.stage2_mux.layer9 -> drawer.outputs.color_out_port
+drawer.stage2_mux.layerA -> drawer.outputs.color_out_port
+
+# Clock and reset feed only the flop bank
+drawer.inputs.clk   -> drawer.stage1_flops: "clk  (1)"
+drawer.inputs.reset -> drawer.stage1_flops: "reset  (1, async)"
+
+# ---------------------------------------------------------------
+# Annotations
+# ---------------------------------------------------------------
+
+note_comb: "color_out is COMBINATIONAL\n(always_comb at hw/entity_drawer.sv:330).\nThe 1-cycle visible latency lives in the\nstage-1 hit-signal flops at line 297 +\nthe sprite ROM read latency,\nNOT in any registered output stage." { class: note }
+
+note_constants: "Color indices (lines 85-89)\nCOL_YELLOW       = 8'd4\nCOL_GREEN        = 8'd7\nCOL_BRIGHT_GREEN = 8'd9\nCOL_ORANGE       = 8'd12\nCOL_TRANSPARENT  = 8'hFF" { class: note }
+
+note_layout: "Layout constants (lines 92-120)\nGRID_X = 10'd64,  GRID_Y = 10'd112,  CELL = 10'd64\nZOMBIE_W = ZOMBIE_H = 10'd64\nPEA_SIZE = 10'd8,  CURSOR_BORDER = 10'd4\nSEL_X0 = 10'd8,   SEL_X1 = 10'd64\nSEL_Y  = 10'd8,   SEL_SZ = 10'd48,  SEL_BORDER = 10'd4" { class: note }
+
+drawer.stage2_mux -> note_comb:        { style.stroke-dash: 3 }
+drawer.stage2_mux -> note_constants:   { style.stroke-dash: 3 }
+drawer.stage1_cell -> note_layout:     { style.stroke-dash: 3 }

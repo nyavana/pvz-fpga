@@ -1,0 +1,67 @@
+# Title:     Game loop FSM - game_state.state
+# Section:   03-sw
+# Documents: sw/main.c, sw/game.c, sw/game.h
+# Defends:   What are the legal states of the running game, what transitions them, and what gets executed in each state?
+# Detail:    block
+
+...@../common.d2
+
+direction: right
+
+title: "FSM lives in `game_state_t.state` (sw/game.h:93).\nValues defined in sw/game.h:46-48:\n  STATE_PLAYING = 0   STATE_WIN = 1   STATE_LOSE = 2\nThe value -1 is overloaded by sw/main.c:64 to signal exit." {
+  class: note
+}
+
+init: "game_init(&gs)\nsw/game.c:19-32\nmemsets gs, then\n  sun = INITIAL_SUN\n  sun_timer = SUN_INTERVAL\n  state = STATE_PLAYING\n  cursor_row = cursor_col = 0\n  selected_plant_type = PLANT_PEASHOOTER\n  spawn_timer = random in [8*60, 15*60]" {
+  class: sw_module
+}
+
+playing: "STATE_PLAYING (= 0)" { class: fsm_state }
+win:     "STATE_WIN (= 1)"     { class: fsm_state }
+lose:    "STATE_LOSE (= 2)"    { class: fsm_state }
+exit_st: "EXIT\n(gs.state = -1)"   { class: fsm_state }
+
+init -> playing: "initial state\n(sw/game.c:25)"
+
+# Playing -> WIN
+playing -> win: "check_win sets STATE_WIN\nsw/game.c:275-286\ncondition: gs->zombies_spawned == TOTAL_ZOMBIES\nAND no zombies[i].active for any i\n(called last in game_update,\nsw/game.c:301)"
+
+# Playing -> LOSE
+playing -> lose: "update_zombies sets STATE_LOSE\nsw/game.c:143-145\ncondition: z->x_pixel <= GAME_AREA_X\n(zombie reached the lawn's left edge)"
+
+# Playing -> EXIT via ESC
+playing -> exit_st: "process_input sees INPUT_ESC\nsw/main.c:63-65\nsets gs.state = -1; returns;\nmain loop checks `gs.state >= 0` at top\n(sw/main.c:110)"
+
+# WIN -> EXIT
+win -> exit_st: "main loop: print banner,\nrender_frame(&gs) one last time,\nsleep(5), break\n(sw/main.c:133-138)"
+
+# LOSE -> EXIT
+lose -> exit_st: "main loop: print banner,\nrender_frame(&gs) one last time,\nsleep(5), break\n(sw/main.c:139-144)"
+
+playing_actions: "While in STATE_PLAYING:\n  process_input    sw/main.c:114\n  game_update      sw/main.c:119  (advances state machine)\n  render_frame     sw/main.c:122\nThen frame timing usleep at sw/main.c:147-149." {
+  class: note
+}
+
+frozen_note: "game_update() early-returns if state != STATE_PLAYING\n(sw/game.c:290-291), so once WIN/LOSE is set the\ngame state stops advancing - only render_frame keeps\nrunning to display the final scene for the 5 s sleep." {
+  class: note
+}
+
+render_in_end: "render_frame in STATE_WIN/STATE_LOSE\ncalls hide_all_entities (sw/render.c:97-106)\nthen render_sun + render_selected\n(sw/render.c:117-122) - the lawn clears\nbut the HUD remains visible." {
+  class: note
+}
+
+exit_actions: "EXIT path (sw/main.c:152-155):\n  input_close()\n  close(pvz_fd)\n  return 0" {
+  class: note
+}
+
+playing  -> playing_actions: { style.stroke-dash: 3 }
+win      -> frozen_note: { style.stroke-dash: 3 }
+lose     -> frozen_note: { style.stroke-dash: 3 }
+win      -> render_in_end: { style.stroke-dash: 3 }
+exit_st  -> exit_actions: { style.stroke-dash: 3 }
+
+# No PAUSE state in this build
+no_pause_note: "There is no PAUSED state.\nThe FSM has exactly the three values\nin sw/game.h:46-48 plus the -1 exit sentinel." {
+  class: note
+}
+playing -> no_pause_note: { style.stroke-dash: 3 }

@@ -1,0 +1,59 @@
+# Title:     Per-frame software timing — 16.67 ms tick
+# Section:   05-cross-cutting
+# Documents: sw/main.c, sw/game.c, sw/render.c, hw/vga_counters.sv
+# Defends:   What runs inside one 16.67 ms tick, and when can a register write race the VGA scan?
+# Detail:    block
+
+...@../common.d2
+
+direction: right
+
+frame: "Software tick — FRAME_USEC = 16667 us (sw/main.c:22), target 60 Hz (sw/main.c:107-150)" {
+  class: layer
+
+  t0: "t = 0 us\nframe_start = get_time_usec()\n(sw/main.c:111)" { class: note }
+
+  input: "process_input(&gs)\n(sw/main.c:114, :34-68)\ndrains evdev queue via input_poll()\ntypical: few hundred us\n(bounded by INPUT_NONE)" { class: sw_module }
+
+  update: "game_update(&gs)\n(sw/main.c:119, sw/game.c:288-302)\n7 phases: sun -> spawning ->\nfiring -> projectiles -> zombies ->\ncollisions -> win\ntypical: tens of us" { class: sw_module }
+
+  render: "render_frame(&gs)\n(sw/main.c:122, sw/render.c)\nissues <= 51 ioctl(PVZ_WRITE_REG)\neach ~us scale -> hundreds of us total" { class: sw_module }
+
+  pad: "usleep(FRAME_USEC - elapsed)\n(sw/main.c:147-149)\npads the tail to land on the next\n16.67 ms boundary" { class: sw_module }
+
+  t_end: "t = 16667 us\nnext frame starts" { class: note }
+
+  t0 -> input -> update -> render -> pad -> t_end
+}
+
+vga: "VGA scanout — independent 16.67 ms refresh (hw/vga_counters.sv)" {
+  class: layer
+
+  vga_frame: "1 VGA frame = 525 lines x 1600 clk50 cycles\n= 840000 cycles / 50 MHz = 16.8 ms\n(VTOTAL=525, HTOTAL=1600)" { class: hw_module }
+
+  vactive: "vcount = 0..479 (active)\nVGA_BLANK_n = 1\npixels drawn for ~15.25 ms" { class: hw_module }
+
+  vblank: "vcount = 480..524 (blanking)\nfront porch 10, vsync 2, back porch 33\n~1.43 ms of vertical blank" { class: hw_module }
+
+  vga_frame -> vactive -> vblank
+}
+
+tearing: "Tearing risk window\n(render_frame writes during VGA active scan)" {
+  class: note
+}
+
+# render_frame is the source of register writes; vactive is the period
+# during which those writes can land mid-frame and produce a one-frame
+# mismatch.  Mark the overlap as the tearing risk region.
+frame.render -> tearing: { style.stroke-dash: 3 }
+vga.vactive -> tearing: { style.stroke-dash: 3 }
+
+note_tearing: "No vsync latching in pvz_top.\nA register write that lands while the\nVGA scan is in vactive (lines 0..479)\nshows up as a one-frame mismatch:\ntop of frame uses the old value,\nbottom uses the new one." { class: note }
+
+note_loop_constants: "Constants:\n  FRAME_USEC = 16667 (sw/main.c:22)\n  Target refresh = 60 Hz\n  VGA pixel clock = 25 MHz\n  VGA frame = 800 px x 525 lines\n                = 16.80 ms (slightly long;\n                FRAME_USEC is the SW tick)." { class: note }
+
+note_render_writes: "render_frame issues <= 51 ioctls:\n  words 0..1     plant + sunflower bitmaps\n  words 32..39   8 zombies\n  words 40..47   8 peas\n  words 48..50   cursor, sun, selected\nEach call: ioctl -> pvz_ioctl ->\ncopy_from_user -> iowrite32." { class: note }
+
+frame -> note_loop_constants: { style.stroke-dash: 3 }
+frame.pad -> note_tearing: { style.stroke-dash: 3 }
+frame.render -> note_render_writes: { style.stroke-dash: 3 }

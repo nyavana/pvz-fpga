@@ -1,0 +1,57 @@
+# Title:     Cold boot — power on to ./pvz
+# Section:   05-cross-cutting
+# Documents: hw/pvz_top_hw.tcl, sw/pvz_driver.c, sw/main.c, hw/Makefile
+# Defends:   What runs between power-on and a player running ./pvz? What makes the Avalon slave reachable?
+# Detail:    block
+
+...@../common.d2
+
+direction: right
+
+boot: "Cold boot — DE1-SoC power-on to game running" {
+  shape: sequence_diagram
+
+  power: Power rail { class: external }
+  preloader: "Preloader\n(SoC FSBL on QSPI/SD)" { class: external }
+  uboot: "U-Boot\n(secondary boot loader)" { class: external }
+  linux: "Linux kernel + DTB\n(soc_system.dtb)" { class: kernel_module }
+  rootfs: "Root FS / login shell\n(serial console)" { class: external }
+  insmod: "insmod pvz_driver.ko\n(out-of-tree module)" { class: kernel_module }
+  game: "./pvz\n(userspace binary)" { class: sw_module }
+
+  power -> preloader: "power on -> BootROM\nloads preloader from SD"
+
+  preloader -> uboot: "hands off to U-Boot\n(stage 2 boot)"
+
+  uboot -> uboot: "fatload mmc 0:1 0x... soc_system.rbf\nreads RBF from FAT partition"
+
+  uboot -> uboot: "fpga load 0 0x... <size>\nprograms the FPGA fabric\nfrom the loaded RBF"
+
+  uboot -> uboot: "run bridge_enable_handoff\nenables HPS-to-FPGA bridges\n(makes Avalon slaves reachable)"
+
+  uboot -> linux: "bootm\nboots zImage with soc_system.dtb"
+
+  linux -> linux: "kernel probes drivers from DT.\npvz_driver.ko is NOT in-tree,\nso it is NOT auto-loaded here."
+
+  linux -> rootfs: "init -> getty -> login"
+
+  rootfs -> insmod: "user runs insmod pvz_driver.ko\n(manual, after login)"
+
+  insmod -> insmod: "pvz_init (sw/pvz_driver.c:130)\nplatform_driver_probe(&pvz_driver, pvz_probe)"
+
+  insmod -> insmod: "pvz_probe (sw/pvz_driver.c:61):\n  misc_register\n  of_address_to_resource\n  request_mem_region\n  of_iomap\n/dev/pvz now exists"
+
+  insmod -> game: "user runs ./pvz [/dev/input/eventN]\n(sw/main.c:70-156)"
+
+  game -> game: "open /dev/pvz, input_init,\nrender_init, game_init,\nthen 60 Hz main loop"
+}
+
+note_insmod: "Manual insmod is required because\npvz_driver.ko is an out-of-tree\nmodule not bundled in the kernel\nimage. The of_match_table compatible\nstring is csee4840,pvz_gpu-1.0\n(from hw/pvz_top_hw.tcl)." { class: note }
+
+note_bridge: "The bridge_enable_handoff step is\nwhat makes the Avalon slave reachable\nfrom Linux at 0xFF20_0000. Without it\nthe iomap succeeds but every read/write\nhangs the bus." { class: note }
+
+note_rbf_dtb: "The two FPGA artifacts produced by\nhw/Makefile (soc_system.rbf and\nsoc_system.dtb) are both consumed in\nthis boot path: rbf programs the\nfabric, dtb tells Linux where the\nslave window lives." { class: note }
+
+boot.insmod -> note_insmod: { style.stroke-dash: 3 }
+boot.uboot -> note_bridge: { style.stroke-dash: 3 }
+boot.linux -> note_rbf_dtb: { style.stroke-dash: 3 }

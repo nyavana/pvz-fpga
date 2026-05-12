@@ -1,0 +1,102 @@
+# Title:     Input pipeline - evdev keyboard to game intents
+# Section:   03-sw
+# Documents: sw/input.c, sw/input.h, sw/main.c
+# Defends:   How does a key press on /dev/input/eventN turn into a game-state mutation, and which keys are wired to what?
+# Detail:    block
+
+...@../common.d2
+
+direction: right
+
+title: "Input is a pull pipeline driven by the main loop.\ninput_poll() is non-blocking - process_input drains\nthe queue each frame, then returns to the main loop." {
+  class: note
+}
+
+kbd: "USB keyboard\n(or Xbox 360 gamepad)" { class: external }
+dev_node: "/dev/input/eventN\n(evdev character device)" { class: bus }
+
+init_box: "input_init(device_path)\nsw/input.c:21-29\nopen(path, O_RDONLY | O_NONBLOCK)\nstores fd in static input_fd\n(called once from sw/main.c:90)" {
+  class: sw_module
+}
+
+poll_box: "input_poll()\nsw/input.c:31-71\nloop: read(input_fd, &ev, sizeof(ev))\n  if EAGAIN -> return INPUT_NONE\n  decode struct input_event\n  return one INPUT_* per call" {
+  class: sw_module
+}
+
+decode_box: "Decode in input_poll switch\n(sw/input.c:57-67)" {
+  class: sw_module
+  direction: down
+
+  k_up:    "KEY_UP    -> INPUT_UP"        { class: signal }
+  k_down:  "KEY_DOWN  -> INPUT_DOWN"      { class: signal }
+  k_left:  "KEY_LEFT  -> INPUT_LEFT"      { class: signal }
+  k_right: "KEY_RIGHT -> INPUT_RIGHT"     { class: signal }
+  k_space: "KEY_SPACE -> INPUT_SPACE"     { class: signal }
+  k_d:     "KEY_D     -> INPUT_D"         { class: signal }
+  k_tab:   "KEY_TAB   -> INPUT_TAB"       { class: signal }
+  k_esc:   "KEY_ESC   -> INPUT_ESC"       { class: signal }
+  k_none:  "queue empty -> INPUT_NONE\n(sw/input.c:36, :70)" { class: signal }
+}
+
+proc_box: "process_input(&gs)\nsw/main.c:34-68\nwhile ((key = input_poll()) != INPUT_NONE)\n  switch (key) { ... }" {
+  class: sw_module
+}
+
+# Game-state effects
+effects: "Game-state mutations" {
+  class: layer
+  direction: down
+
+  e_up:    "INPUT_UP    -> if cursor_row > 0:           cursor_row--\n(sw/main.c:40-42)" { class: sw_module }
+  e_down:  "INPUT_DOWN  -> if cursor_row < GRID_ROWS-1: cursor_row++\n(sw/main.c:43-45)" { class: sw_module }
+  e_left:  "INPUT_LEFT  -> if cursor_col > 0:           cursor_col--\n(sw/main.c:46-48)" { class: sw_module }
+  e_right: "INPUT_RIGHT -> if cursor_col < GRID_COLS-1: cursor_col++\n(sw/main.c:49-51)" { class: sw_module }
+  e_space: "INPUT_SPACE -> game_place_plant(gs)\n(sw/main.c:52-54; sw/game.c:34-51)" { class: sw_module }
+  e_d:     "INPUT_D     -> game_remove_plant(gs)\n(sw/main.c:55-57; sw/game.c:53-64)" { class: sw_module }
+  e_tab:   "INPUT_TAB   -> selected_plant_type ^=\n               (PEASHOOTER ^ SUNFLOWER)\n(sw/main.c:58-62)" { class: sw_module }
+  e_esc:   "INPUT_ESC   -> gs.state = -1; return\n(sw/main.c:63-65)" { class: sw_module }
+}
+
+# Wiring
+kbd -> dev_node: "USB HID -> evdev"
+dev_node -> init_box: "open path (sw/main.c:72, :90)"
+init_box -> poll_box: "static input_fd"
+dev_node -> poll_box: "read input_event\n(EV_KEY only, value==1)"
+poll_box -> decode_box
+
+decode_box.k_up    -> proc_box
+decode_box.k_down  -> proc_box
+decode_box.k_left  -> proc_box
+decode_box.k_right -> proc_box
+decode_box.k_space -> proc_box
+decode_box.k_d     -> proc_box
+decode_box.k_tab   -> proc_box
+decode_box.k_esc   -> proc_box
+decode_box.k_none  -> proc_box: "exits while loop"
+
+proc_box -> effects.e_up:    "INPUT_UP"
+proc_box -> effects.e_down:  "INPUT_DOWN"
+proc_box -> effects.e_left:  "INPUT_LEFT"
+proc_box -> effects.e_right: "INPUT_RIGHT"
+proc_box -> effects.e_space: "INPUT_SPACE"
+proc_box -> effects.e_d:     "INPUT_D"
+proc_box -> effects.e_tab:   "INPUT_TAB"
+proc_box -> effects.e_esc:   "INPUT_ESC"
+
+# Notes
+codes_note: "INPUT_* symbols defined in sw/input.h:5-13:\n  INPUT_NONE=0  INPUT_UP=1    INPUT_DOWN=2\n  INPUT_LEFT=3  INPUT_RIGHT=4 INPUT_SPACE=5\n  INPUT_D=6     INPUT_ESC=7   INPUT_TAB=8" {
+  class: note
+}
+
+drain_note: "process_input drains every event in the queue per\nframe (one input_poll call per iteration of the inner\nwhile loop, sw/main.c:38).  INPUT_NONE breaks the loop." {
+  class: note
+}
+
+filter_note: "Event filter (sw/input.c):\n  EV_KEY events: only `value == 1` (press) accepted\n  EV_REL, EV_SYN, etc.: dropped\n  Unmapped key codes: fall through `default: break`" {
+  class: note
+}
+
+title       -> poll_box:  { style.stroke-dash: 3 }
+poll_box    -> filter_note: { style.stroke-dash: 3 }
+decode_box  -> codes_note: { style.stroke-dash: 3 }
+proc_box    -> drain_note: { style.stroke-dash: 3 }

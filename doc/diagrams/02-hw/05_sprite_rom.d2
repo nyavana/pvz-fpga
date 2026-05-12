@@ -1,0 +1,103 @@
+# Title:     sprite_rom — 64x64 byte ROM, 1-cycle read
+# Section:   02-hw
+# Documents: hw/sprite_rom.sv, hw/pvz_top.sv, hw/entity_drawer.sv, hw/peashooter_idx.mem
+# Defends:   How are sprite pixels fetched from the FPGA's on-chip memory, and why is there a one-cycle read delay?
+# Detail:    block
+
+...@../common.d2
+
+direction: right
+
+sprite_rom: "sprite_rom #(MEM_FILE)\n(hw/sprite_rom.sv)\n64x64 palette-indexed sprite,\n4096 bytes per instance,\ninferred M10K block RAM." {
+  class: hw_module
+
+  init: |md
+    `initial $readmemh(MEM_FILE, rom)`
+    (sprite_rom.sv:21-23)
+    Loaded at elaboration. Each line of the
+    .mem file is one hex byte (palette index
+    0x00..0x0C; 0xFF means transparent).
+    First lines of peashooter_idx.mem are FF
+    (top-of-sprite transparent region).
+  | {
+    class: signal
+  }
+
+  rom_array: "logic [7:0] rom [0:4095]\n(sprite_rom.sv:19)\n4096 entries, one byte each.\nRow-major: rom[row*64 + col]." {
+    class: signal
+  }
+
+  read_ff: "always_ff @(posedge clk)\n  pixel <= rom[addr];\n(sprite_rom.sv:25-26)\nRegistered output -> 1-cycle read latency." {
+    class: signal
+  }
+}
+
+# Three instantiations from pvz_top.sv (lines 179-199)
+plant_inst: "plant_rom_inst\n(pvz_top.sv:179-183)\n#(MEM_FILE = \"peashooter_idx.mem\")\nAddress driven by entity_drawer.plant_rd_addr." {
+  class: hw_module
+}
+
+sunflower_inst: "sunflower_rom_inst\n(pvz_top.sv:187-191)\n#(MEM_FILE = \"sunflower_idx.mem\")\nShares the cell-local address with\nplant_rom_inst (pvz_top.sv:189)." {
+  class: hw_module
+}
+
+zombie_inst: "zombie_rom_inst\n(pvz_top.sv:195-199)\n#(MEM_FILE = \"zombie_idx.mem\")\nAddress driven by entity_drawer.zombie_rd_addr." {
+  class: hw_module
+}
+
+# Ports
+clk_in: "clk (50 MHz)\nfrom soc_system clk_0" { class: signal }
+
+addr_in: "addr[11:0]\n12 bits = log2(4096)\n= {in_cell_y[5:0], in_cell_x[5:0]}\nrow-major 64x64" { class: signal }
+
+pixel_out: "pixel[7:0]\npalette index\n(0x00..0x0C valid color,\n 0xFF = transparent sentinel)" { class: signal }
+
+# Wire-up: input/output ports of the sprite_rom module
+clk_in -> sprite_rom.read_ff: "posedge clk"
+addr_in -> sprite_rom.read_ff: "addr selects rom entry"
+sprite_rom.init -> sprite_rom.rom_array: "readmemh fills 4096 bytes"
+sprite_rom.rom_array -> sprite_rom.read_ff: "rom[addr]"
+sprite_rom.read_ff -> pixel_out: "registered, 1 cycle after addr"
+
+# Three instances share the same module
+sprite_rom -> plant_inst: { style.stroke-dash: 3 }
+sprite_rom -> sunflower_inst: { style.stroke-dash: 3 }
+sprite_rom -> zombie_inst: { style.stroke-dash: 3 }
+
+# Drawer issues the addresses
+drawer: "entity_drawer\n(hw/entity_drawer.sv)\nIssues plant_rd_addr (line 166) and\nzombie_rd_addr (line 194)\ncombinationally in stage 1." {
+  class: hw_module
+}
+
+drawer -> plant_inst:     "plant_rd_addr[11:0]"
+drawer -> sunflower_inst: "(shares plant_rd_addr)"
+drawer -> zombie_inst:    "zombie_rd_addr[11:0]"
+plant_inst     -> drawer: "plant_rd_pixel[7:0]\n(next cycle)"
+sunflower_inst -> drawer: "sunflower_rd_pixel[7:0]\n(next cycle)"
+zombie_inst    -> drawer: "zombie_rd_pixel[7:0]\n(next cycle)"
+
+# Address composition note
+addr_compose: "Address composition\n(entity_drawer.sv:155-166)\ncell_col  = gx[8:6]    (3 bits, 0..7)\ncell_row  = gy[7:6]    (2 bits, 0..3)\nin_cell_x = gx[5:0]    (6 bits, 0..63)\nin_cell_y = gy[5:0]    (6 bits, 0..63)\nplant_rd_addr = {in_cell_y, in_cell_x}\n             -> 12-bit row-major index" {
+  class: note
+}
+
+latency_note: "1-cycle read latency.\nentity_drawer issues the address\ncombinationally in stage 1; the ROM\nreturns pixel on the next clock,\naligned by stage-1 hit-signal flops\nin entity_drawer (always_ff at\nentity_drawer.sv:297)." {
+  class: note
+}
+
+mem_note: |md
+  MEM_FILE loading
+  Each sprite_rom instance has an initial
+  block that calls `$readmemh(MEM_FILE)`.
+  Files are 4096 lines of hex bytes,
+  relative to the Quartus working dir.
+  The palette index 0xFF (= COL_TRANSPARENT
+  in entity_drawer.sv:89) marks transparent
+  pixels — the drawer skips those layers.
+| {
+  class: note
+}
+
+sprite_rom -> addr_compose: { style.stroke-dash: 3 }
+sprite_rom.read_ff -> latency_note: { style.stroke-dash: 3 }
+sprite_rom.init -> mem_note: { style.stroke-dash: 3 }

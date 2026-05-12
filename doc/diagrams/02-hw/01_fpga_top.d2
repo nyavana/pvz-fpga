@@ -1,0 +1,64 @@
+# Title:     FPGA top-level containment tree
+# Section:   02-hw
+# Documents: hw/soc_system_top.sv, hw/soc_system.qsys, hw/pvz_top.sv
+# Defends:   What is the FPGA module hierarchy that Quartus actually synthesizes, and where does pvz_top sit inside it?
+# Detail:    block
+
+...@../common.d2
+
+direction: down
+
+soc_system_top: "soc_system_top\n(hw/soc_system_top.sv)\nQuartus synthesis top.\nWires board pins to the qsys system\nand ties off unused peripherals to SW[0]." {
+  class: hw_module
+
+  soc_system: "soc_system\n(hw/soc_system.qsys, qsys-generated)\nPlatform Designer wrapper:\ninstantiates pvz_top_0 once and\nexposes its Avalon slave + VGA conduit." {
+    class: hw_module
+
+    clk_0: "clk_0\n(clock_source IP)\nclk = CLOCK_50 (50 MHz),\nreset_n = 1'b1" { class: bus }
+
+    hps_0: "hps_0\n(altera_hps IP)\nCortex-A9 + DDR3 + SD/MMC +\nUART + GPIO + I2C + SPI.\nHosts the lightweight HPS-to-FPGA bridge\n(base 0xff200000)." { class: bus }
+
+    lw_bridge: "lw_h2f bridge\n(internal to hps_0)\nAvalon-MM master into the FPGA;\nfans out to pvz_top_0.avalon_slave." { class: bus }
+
+    pvz_top_0: "pvz_top_0\n(hw/pvz_top.sv)\nAvalon-MM slave + VGA conduit.\nSee 02_pvz_top_block.d2 for the inside:\ndrawer + sprite ROMs + vga_counters +\nbg_grid + color_palette." {
+      class: hw_module
+    }
+  }
+}
+
+vga_pins: "VGA pins\nVGA_R/G/B[7:0],\nVGA_HS, VGA_VS, VGA_CLK,\nVGA_BLANK_n, VGA_SYNC_n" { class: bus }
+
+hps_ddr3_pins: "HPS DDR3 pins\nHPS_DDR3_ADDR[14:0],\nHPS_DDR3_DQ[31:0], DQS, BA,\nCK, CKE, CS_N, WE_N, ODT, ..." { class: bus }
+
+hps_sdmmc_pins: "HPS SD/MMC pins\nHPS_SD_CLK, HPS_SD_CMD,\nHPS_SD_DATA[3:0]" { class: bus }
+
+hps_uart_gpio_pins: "HPS UART + GPIO pins\nHPS_UART_RX/TX (serial console),\nHPS_KEY, HPS_LED, HPS_I2C{1,2},\nHPS_USB_*, HPS_ENET_*, HPS_SPIM_*" { class: bus }
+
+clock_pin: "CLOCK_50\n(50 MHz board oscillator)" { class: bus }
+
+# Clock + reset fan-in (qsys wires clk_0.clk to hps_0 and pvz_top_0)
+clock_pin -> soc_system_top.soc_system.clk_0: "CLOCK_50"
+soc_system_top.soc_system.clk_0 -> soc_system_top.soc_system.hps_0: "clk"
+soc_system_top.soc_system.clk_0 -> soc_system_top.soc_system.pvz_top_0: "clk (50 MHz)"
+
+# HPS lightweight bridge -> pvz_top Avalon slave
+soc_system_top.soc_system.hps_0 -> soc_system_top.soc_system.lw_bridge: { style.stroke-dash: 3 }
+soc_system_top.soc_system.lw_bridge -> soc_system_top.soc_system.pvz_top_0: "address[5:0], writedata[31:0],\nwrite, chipselect\n(base 0xff200000)"
+
+# VGA conduit exported through soc_system_top to the board pins
+soc_system_top.soc_system.pvz_top_0 -> vga_pins: "pvz_top_0_vga_*\n(qsys conduit, see\nsoc_system_top.sv:242-250)"
+
+# HPS pin groups exit through soc_system_top
+soc_system_top.soc_system.hps_0 -> hps_ddr3_pins: "hps_ddr3_*\n(HPS DDR3 controller)"
+soc_system_top.soc_system.hps_0 -> hps_sdmmc_pins: "hps_io_sdio_*\n(rootfs / kernel boot)"
+soc_system_top.soc_system.hps_0 -> hps_uart_gpio_pins: "hps_io_uart0/gpio/i2c/spim/usb/emac"
+
+note_qsys: "soc_system is a qsys-generated wrapper;\nit instantiates pvz_top once and exposes\nits Avalon slave to the lightweight\nHPS-to-FPGA bridge.\nQsys modules present (hw/soc_system.qsys):\nclk_0, hps_0, pvz_top_0." { class: note }
+
+note_collapsed: "pvz_top is collapsed here.\nInside it: vga_counters, bg_grid,\nsprite_rom x3 (plant/sunflower/zombie),\nentity_drawer, color_palette.\nSee 02-hw/02_pvz_top_block.d2." { class: note }
+
+note_tieoffs: "soc_system_top also ties off every\nunused board peripheral (audio, DRAM,\nGPIO, HEX, LEDR, PS2, IRDA, TD) to\nSW[0]/SW[1] so Quartus does not warn\nabout undriven outputs.\n(soc_system_top.sv:253-294)" { class: note }
+
+soc_system_top.soc_system -> note_qsys: { style.stroke-dash: 3 }
+soc_system_top.soc_system.pvz_top_0 -> note_collapsed: { style.stroke-dash: 3 }
+soc_system_top -> note_tieoffs: { style.stroke-dash: 3 }

@@ -1,0 +1,48 @@
+direction: down
+title: "Avalon-MM register file (51 words, addressUnits = WORDS)" {
+  near: top-center
+  shape: text
+  style.font-size: 20
+  style.bold: true
+}
+
+note_addr: "Byte offset from kernel = word_index * 4\n(Qsys reports WORDS but iowrite32 takes bytes)" {
+  near: top-right
+  shape: text
+  style.font-size: 11
+}
+
+w0: "Word 0  (byte 0x00)\nPLANTS\n32-bit bitmap, bit (row*8+col) = peashooter present" {
+  style.fill: "#d4edda"
+}
+
+w1: "Word 1  (byte 0x04)\nSUNFLOWER\n32-bit bitmap, bit (row*8+col) = sunflower present" {
+  style.fill: "#d4edda"
+}
+
+w_gap1: "Words 2 .. 31  (unused)" {
+  style.fill: "#f5f5f5"
+  style.font-size: 12
+}
+
+w32: "Words 32 .. 39  (bytes 0x80 .. 0x9c)\nZOMBIE[0 .. 7]\nbit 31 = alive,  [11:10] = row,  [9:0] = x_pixel" {
+  style.fill: "#f8cecc"
+}
+
+w40: "Words 40 .. 47  (bytes 0xa0 .. 0xbc)\nPEA[0 .. 7]\nbit 31 = alive,  [11:10] = row,  [9:0] = x_pixel" {
+  style.fill: "#fff2cc"
+}
+
+w48: "Word 48  (byte 0xc0)\nCURSOR\nbit 31 = visible,  [4:2] = col,  [1:0] = row" {
+  style.fill: "#dae8fc"
+}
+
+w49: "Word 49  (byte 0xc4)\nSUN\n[13:0] = sun count (0 .. 16383)" {
+  style.fill: "#fff3cd"
+}
+
+w50: "Word 50  (byte 0xc8)\nSELECTED\n[1:0] = selected plant (0 = peashooter, 1 = sunflower)" {
+  style.fill: "#e1d5e7"
+}
+
+w0 -> w1 -> w_gap1 -> w32 -> w40 -> w48 -> w49 -> w50

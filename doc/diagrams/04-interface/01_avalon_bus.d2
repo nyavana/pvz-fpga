@@ -1,0 +1,54 @@
+# Title:     Avalon-MM path: HPS to pvz_top
+# Section:   04-interface
+# Documents: hw/pvz_top.sv, hw/pvz_top_hw.tcl, hw/soc_system.qsys, sw/pvz_driver.c
+# Defends:   How does a CPU byte offset reach the right word of the FPGA register file across the lightweight HPS-to-FPGA bridge?
+# Detail:    block
+
+...@../common.d2
+
+direction: right
+
+title: "Avalon-MM path: HPS to pvz_top\nCPU byte offset N --> bridge --> qsys --> word address N>>2" {
+  class: note
+}
+
+hps: "HPS Cortex-A9\nLinux 4.19, pvz_driver.ko\niowrite32(value, virtbase + word*4)" {
+  class: hw_module
+}
+
+bridge: "Lightweight HPS-to-FPGA bridge\nbase 0xFF20_0000\n(byte-addressed from CPU side)" {
+  class: bus
+}
+
+soc_system: "soc_system (qsys interconnect)\nhps_0.h2f_lw_axi_master -> pvz_top_0.s1\n(see hw/soc_system.qsys:607-615)" {
+  class: hw_module
+}
+
+slave_port: "pvz_top Avalon-MM slave port (s1)\naddress[5:0]   word index 0..63\nwritedata[31:0] 32-bit value\nwrite           write strobe\nchipselect      slave select\n(declared at hw/pvz_top.sv:34-38)" {
+  class: hw_module
+}
+
+regfile: "pvz_top register file\nlatched on posedge clk when (chipselect && write)\ndecoded by if/else if at hw/pvz_top.sv:114-146" {
+  class: hw_module
+}
+
+units_note: "qsys addressUnits = WORDS\n(see hw/pvz_top_hw.tcl:52)\nHW `address[5:0]` is the WORD index;\nSW byte offset = word_index * 4." {
+  class: note
+}
+
+aliasing_note: "6-bit address ==> 64 word slots representable.\nOnly 51 words (0..50) are defined.\nWords 2..31 alias into the zombie slot via\n`else if (address < 6'd40)` (hw/pvz_top.sv:122).\nFull layout: 04-interface/03_register_map_cheatsheet.d2" {
+  class: note
+}
+
+tearing_note: "No vsync latching.\nWrites take effect on the next clock,\nso a write that races the scan can\nproduce a one-frame tearing window.\n(hw/pvz_top.sv:25-27)" {
+  class: note
+}
+
+hps -> bridge: "iowrite32 byte address\n0xFF20_0000 + word*4"
+bridge -> soc_system: "AXI/Avalon\n(byte address)"
+soc_system -> slave_port: "address = byte_offset >> 2\n(WORDS units)"
+slave_port -> regfile: "decoded write\n(posedge clk)"
+
+slave_port -> units_note: { style.stroke-dash: 3 }
+slave_port -> aliasing_note: { style.stroke-dash: 3 }
+regfile -> tearing_note: { style.stroke-dash: 3 }

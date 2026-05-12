@@ -1,0 +1,113 @@
+# Title:     Cyclone V SoC block diagram
+# Section:   01-system
+# Documents: hw/soc_system_top.sv, hw/soc_system.qsys, hw/pvz_top.sv, sw/pvz_driver.c
+# Defends:   What is inside the Cyclone V SoC, how do the HPS and FPGA halves connect, and which off-chip peripherals are wired in on this branch?
+# Detail:    block
+
+...@../common.d2
+
+direction: down
+
+soc: "Cyclone V SoC (DE1-SoC, 5CSEMA5F31C6)" {
+  class: layer
+
+  hps: "HPS subsystem" {
+    class: layer
+
+    cpu: "Cortex-A9 MPCore\n(dual core)" {
+      class: hw_module
+    }
+
+    l1_caches: "L1 caches\n(per core: I + D)" {
+      class: hw_module
+    }
+
+    l2_cache: "L2 cache\n(shared)" {
+      class: hw_module
+    }
+
+    ddr_ctl: "DDR3 memory controller" {
+      class: hw_module
+    }
+
+    hps_periph: "HPS peripherals\nUART, USB, GPIO, SD/MMC" {
+      class: hw_module
+    }
+
+    lw_bridge: "Lightweight HPS-to-FPGA\nbase 0xFF20_0000\n(used by this project)" {
+      class: bus
+    }
+
+    h2f_bridge: "HPS-to-FPGA\n(wide, unused)" {
+      class: bus
+    }
+
+    f2h_bridge: "FPGA-to-HPS\n(unused)" {
+      class: bus
+    }
+  }
+
+  fpga: "FPGA fabric" {
+    class: layer
+
+    soc_system: "soc_system (qsys-generated)\n(hw/soc_system.qsys)\nbridge fabric + pvz_top instance" {
+      class: hw_module
+    }
+
+    pvz_top: "pvz_top\n(hw/pvz_top.sv)\nAvalon-MM slave + VGA conduit" {
+      class: hw_module
+    }
+  }
+}
+
+ddr3: "DDR3 SDRAM\n(1 GB, off-chip)" {
+  class: external
+}
+
+sd_card: "MicroSD card\n(boot + rootfs)" {
+  class: external
+}
+
+usb_host: "USB host port\n(USB keyboard)" {
+  class: external
+}
+
+vga_pins: "VGA DAC pins\nVGA_R/G/B[7:0], VGA_HS,\nVGA_VS, VGA_CLK" {
+  class: external
+}
+
+uart_jtag: "JTAG / UART\nmini-USB to host PC\nscreen /dev/ttyUSB0 115200" {
+  class: external
+}
+
+# HPS-internal cache + memory path
+soc.hps.cpu -> soc.hps.l1_caches: "load / store"
+soc.hps.l1_caches -> soc.hps.l2_cache: "miss"
+soc.hps.l2_cache -> soc.hps.ddr_ctl: "miss"
+soc.hps.ddr_ctl -> ddr3: "DDR3 PHY"
+
+# HPS peripherals off-chip
+soc.hps.hps_periph -> sd_card: "SD/MMC"
+soc.hps.hps_periph -> usb_host: "USB"
+soc.hps.hps_periph -> uart_jtag: "UART"
+
+# HPS -> FPGA via lightweight bridge (the live path)
+soc.hps.cpu -> soc.hps.lw_bridge: "iowrite32\n(sw/pvz_driver.c:40)"
+soc.hps.lw_bridge -> soc.fpga.soc_system: "Avalon-MM\naddress[5:0], writedata[31:0],\nwrite, chipselect"
+soc.fpga.soc_system -> soc.fpga.pvz_top: "Avalon-MM slave port s1\n(hw/soc_system.qsys:611)"
+
+# Unused bridges
+soc.hps.cpu -> soc.hps.h2f_bridge: "(unused)" { style.stroke-dash: 4 }
+soc.hps.f2h_bridge -> soc.hps.cpu: "(unused)" { style.stroke-dash: 4 }
+
+# FPGA -> VGA pins
+soc.fpga.pvz_top -> vga_pins: "VGA conduit\n(hw/soc_system_top.sv:243-250)"
+
+# Notes
+bridge_note: "Only the lightweight HPS-to-FPGA bridge is\nused on this branch; the wide HPS-to-FPGA\nand FPGA-to-HPS bridges are unused." { class: note }
+
+soc.hps.lw_bridge -> bridge_note: { style.stroke-dash: 3 }
+
+clock_note: "FPGA fabric runs at 50 MHz (vga_counters\nclk50 input, hw/pvz_top.sv:54)." { class: note }
+
+soc.fpga.pvz_top -> clock_note: { style.stroke-dash: 3 }

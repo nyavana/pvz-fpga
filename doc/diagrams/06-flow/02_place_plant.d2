@@ -1,0 +1,79 @@
+# Title:     Place-plant flow — TAB then SPACE
+# Section:   06-flow
+# Documents: sw/main.c, sw/game.c, sw/game.h, sw/render.c, hw/pvz_top.sv, hw/entity_drawer.sv
+# Defends:   What happens when the user cycles plant type with TAB and places a plant with SPACE?
+# Detail:    block
+
+...@../common.d2
+
+direction: right
+
+user: User\n(keyboard) { class: external }
+
+tab_path: "TAB pressed" {
+  class: layer
+
+  s1: "process_input (sw/main.c:58-62)\nselected_plant_type =\n  (current == PEASHOOTER)\n    ? SUNFLOWER\n    : PEASHOOTER" { class: sw_module }
+}
+
+space_path: "SPACE pressed" {
+  class: layer
+
+  s2: "process_input (sw/main.c:52-54)\ncalls game_place_plant(&gs)" { class: sw_module }
+
+  s3: "game_place_plant (sw/game.c:34-51)" {
+    class: sw_module
+
+    check_occupied: "grid[r][c].type != PLANT_NONE ?" { class: fsm_state }
+    occupied_return: "return 0\n(cell occupied)" { class: note }
+
+    check_sun: "gs->sun >= cost ?\n(cost = 50 for both types)" { class: fsm_state }
+    poor_return: "return 0\n(not enough sun)" { class: note }
+
+    commit: "grid[r][c].type = selected_plant_type\ngrid[r][c].fire_cooldown = PLANT_FIRE_COOLDOWN (120)\ngrid[r][c].hp = PLANT_HP (3)\ngs->sun -= cost (50)\nreturn 1" { class: sw_module }
+
+    check_occupied -> occupied_return: "yes" { style.stroke-dash: 3 }
+    check_occupied -> check_sun: "no"
+    check_sun -> poor_return: "no" { style.stroke-dash: 3 }
+    check_sun -> commit: "yes"
+  }
+}
+
+next_frame: "Next frame: render_frame (sw/render.c)" {
+  class: layer
+
+  walk: "render_plants walks the 4x8 grid\n(sw/render.c:32-47)\n  pea_bits |= 1 << (r*8 + c) for peashooters\n  sun_bits |= 1 << (r*8 + c) for sunflowers" { class: sw_module }
+
+  ioctl_pea: "ioctl PVZ_WRITE_REG\nword 0 (PLANTS) <= pea_bits" { class: kernel_module }
+  ioctl_sun: "ioctl PVZ_WRITE_REG\nword 1 (SUNFLOWER) <= sun_bits" { class: kernel_module }
+  ioctl_count: "ioctl PVZ_WRITE_REG\nword 49 (SUN) <= gs->sun" { class: kernel_module }
+}
+
+fpga: "FPGA scanout (next vblank to next)" {
+  class: layer
+
+  regfile: "pvz_top regfile\nplant_present / sunflower_present\n(hw/pvz_top.sv:114-120)" { class: hw_module }
+  drawer: "entity_drawer reads\nplant_present[plant_idx] /\nsunflower_present[plant_idx]\nat the cell pixel\n(hw/entity_drawer.sv)" { class: hw_module }
+  sprite: "sprite_rom paints the selected\nplant; sun HUD redraws with\nupdated sun value" { class: hw_module }
+}
+
+user -> tab_path.s1
+user -> space_path.s2
+space_path.s2 -> space_path.s3
+space_path.s3.commit -> next_frame.walk
+tab_path.s1 -> next_frame.walk: "next frame"
+next_frame.walk -> next_frame.ioctl_pea
+next_frame.walk -> next_frame.ioctl_sun
+next_frame.walk -> next_frame.ioctl_count
+next_frame.ioctl_pea -> fpga.regfile
+next_frame.ioctl_sun -> fpga.regfile
+next_frame.ioctl_count -> fpga.regfile
+fpga.regfile -> fpga.drawer
+fpga.drawer -> fpga.sprite
+
+note_constants: "Constants (sw/game.h):\n  PLANT_COST = 50\n  SUNFLOWER_COST = 50\n  PLANT_HP = 3\n  PLANT_FIRE_COOLDOWN = 120 frames\n  INITIAL_SUN = 100" { class: note }
+
+note_no_vsync: "No vsync latching:\nwrites take effect on the next\nclk edge (hw/pvz_top.sv:95-148).\nA TAB or SPACE landing mid-scan\ncan show a one-frame tearing\nwindow." { class: note }
+
+user -> note_constants: { style.stroke-dash: 3 }
+fpga.regfile -> note_no_vsync: { style.stroke-dash: 3 }

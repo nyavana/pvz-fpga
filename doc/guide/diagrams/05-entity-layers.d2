@@ -1,0 +1,47 @@
+direction: down
+title: "entity_drawer.sv compositing layers (low -> high)" {
+  near: top-center
+  shape: text
+  style.font-size: 20
+  style.bold: true
+}
+
+note: "Later layers overwrite earlier ones.\n0xFF in a sprite ROM pixel = transparent (skip)." {
+  near: top-right
+  shape: text
+  style.font-size: 11
+}
+
+L1: "1. Background\n(lawn checker from bg_grid.sv,\nsky-blue outside grid)" {
+  style.fill: "#a3cfbb"
+}
+
+L2: "2. Plant sprite\n(64 x 64 from peashooter_idx.mem,\nplant_present[row*8+col] bit)" {
+  style.fill: "#a3cfbb"
+}
+
+L3: "3. Sunflower sprite\n(64 x 64 from sunflower_idx.mem,\nsunflower_present[row*8+col] bit)" {
+  style.fill: "#a3cfbb"
+}
+
+L4: "4. Pea projectile\n(solid 8 x 8 bright-green square,\ndrawn procedurally, not via ROM)" {
+  style.fill: "#d4edda"
+}
+
+L5: "5. Zombie sprite\n(64 x 64 from zombie_idx.mem,\nfirst-hit priority across 8 slots)" {
+  style.fill: "#d4edda"
+}
+
+L6: "6. Cursor border\n(yellow hollow rectangle, 4 px,\naround the selected grid cell)" {
+  style.fill: "#fff2cc"
+}
+
+L7: "7. Sun HUD\n(up to 10 yellow blocks across top,\none per 50 sun units)" {
+  style.fill: "#fff2cc"
+}
+
+L8: "8. Plant selector boxes\n(green peashooter / orange sunflower,\nyellow border on the selected one)" {
+  style.fill: "#ffe5d0"
+}
+
+L1 -> L2 -> L3 -> L4 -> L5 -> L6 -> L7 -> L8

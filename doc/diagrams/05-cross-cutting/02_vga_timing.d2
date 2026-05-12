@@ -1,0 +1,76 @@
+# Title:     VGA 640x480 @ 60 Hz — pixel clock, sync, blanking
+# Section:   05-cross-cutting
+# Documents: hw/vga_counters.sv, hw/pvz_top.sv
+# Defends:   Exactly which counter values produce HS, VS, BLANK_n? Where do the porch widths come from?
+# Detail:    block
+
+...@../common.d2
+
+direction: down
+
+clocks: "Clock derivation (hw/vga_counters.sv:65-66)" {
+  class: layer
+
+  clk50: "clk50 — 50 MHz HPS clock\n(20 ns period)" { class: signal }
+
+  pclk: "VGA_CLK = hcount[0]\n25 MHz pixel clock (one tick per 2 cycles)\n40 ns per pixel" { class: signal }
+
+  clk50 -> pclk: "/ 2"
+}
+
+horiz: "Horizontal timing — hcount[10:0] counts clk50 ticks per line" {
+  class: layer
+
+  h_const: "HTOTAL = 1600 clk50 cycles = 800 pixel-clocks per line\nHACTIVE = 1280 (640 px), HFRONT_PORCH = 32 (16 px),\nHSYNC = 192 (96 px), HBACK_PORCH = 96 (48 px)\n(hw/vga_counters.sv:23-27)" { class: note }
+
+  h_active: "hcount = 0 .. 1279\n640 active pixels\npx = hcount[10:1]" { class: hw_module }
+
+  h_fp: "hcount = 1280 .. 1311\n16 px front porch" { class: hw_module }
+
+  h_sync: "hcount = 1312 .. 1503\n96 px hsync pulse\nVGA_HS asserted low\n(hw/vga_counters.sv:53-54)" { class: hw_module }
+
+  h_bp: "hcount = 1504 .. 1599\n48 px back porch" { class: hw_module }
+
+  h_active -> h_fp -> h_sync -> h_bp
+}
+
+vert: "Vertical timing — vcount[9:0] counts lines per frame" {
+  class: layer
+
+  v_const: "VTOTAL = 525 lines per frame\nVACTIVE = 480, VFRONT_PORCH = 10,\nVSYNC = 2, VBACK_PORCH = 33\n(hw/vga_counters.sv:29-33)" { class: note }
+
+  v_active: "vcount = 0 .. 479\n480 active lines\npy = vcount" { class: hw_module }
+
+  v_fp: "vcount = 480 .. 489\n10-line front porch" { class: hw_module }
+
+  v_sync: "vcount = 490 .. 491\n2-line vsync pulse\nVGA_VS asserted low\n(hw/vga_counters.sv:57)" { class: hw_module }
+
+  v_bp: "vcount = 492 .. 524\n33-line back porch" { class: hw_module }
+
+  v_active -> v_fp -> v_sync -> v_bp
+}
+
+blanking: "VGA_BLANK_n (hw/vga_counters.sv:62-63)" {
+  class: layer
+
+  active_window: "Active region\nhcount < 1280 AND vcount < 480\nVGA_BLANK_n = 1\npalette RGB sent to pins" { class: hw_module }
+
+  blanking_region: "Blanking region\notherwise\nVGA_BLANK_n = 0\nVGA_R/G/B forced to 0x00\n(hw/pvz_top.sv:243-253)" { class: hw_module }
+}
+
+monitor: "VGA monitor 640x480 @ 60 Hz" { class: external }
+
+clocks.pclk -> horiz: "drives hcount increment"
+horiz.h_const -> horiz.h_active
+vert.v_const -> vert.v_active
+horiz.h_bp -> vert: "endOfLine -> vcount tick"
+vert.v_bp -> blanking
+blanking.active_window -> monitor: "VGA_R/G/B[7:0]"
+blanking.blanking_region -> monitor: "black"
+
+note_addr_units: "hcount counts at 50 MHz; the visible\npixel index is hcount[10:1] (0..639).\nBoth porch widths above are listed in\nclk50 cycles (as written in the .sv)\nand in pixel-clocks for the monitor." { class: note }
+
+note_blank: "VGA_BLANK_n gates color output to\nblack during blanking.\n(hw/pvz_top.sv:243-253)" { class: note }
+
+horiz -> note_addr_units: { style.stroke-dash: 3 }
+blanking -> note_blank: { style.stroke-dash: 3 }

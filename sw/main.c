@@ -55,11 +55,10 @@ static void process_input(game_state_t *gs)
         case INPUT_D:
             game_remove_plant(gs);
             break;
-        case INPUT_Q:
-            gs->selected_plant_type = PLANT_PEASHOOTER;
-            break;
-        case INPUT_W:
-            gs->selected_plant_type = PLANT_SUNFLOWER;
+        case INPUT_TAB:
+            gs->selected_plant_type =
+                (gs->selected_plant_type == PLANT_PEASHOOTER)
+                ? PLANT_SUNFLOWER : PLANT_PEASHOOTER;
             break;
         case INPUT_ESC:
             gs->state = -1; /* signal exit */
@@ -102,7 +101,7 @@ int main(int argc, char *argv[])
     game_init(&gs);
 
     printf("Plants vs Zombies MVP\n");
-    printf("Controls: Arrow keys=move cursor, Q=peashooter, W=sunflower, Space=place, D=remove, ESC=quit\n");
+    printf("Controls: Arrows=move, Tab=toggle plant, Space=place, D=remove, ESC=quit\n");
     printf("Sun: %d | Plant cost: %d\n\n", gs.sun, PLANT_COST);
 
     /* Main game loop */

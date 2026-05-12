@@ -1,0 +1,66 @@
+# Title:     insmod pvz_driver.ko — probe sequence
+# Section:   06-flow
+# Documents: sw/pvz_driver.c, sw/pvz_driver.h, sw/pvz.h
+# Defends:   What happens between `insmod pvz_driver.ko` and /dev/pvz being ready for ioctls?
+# Detail:    block
+
+...@../common.d2
+
+probe: "insmod pvz_driver.ko -> /dev/pvz ready" {
+  shape: sequence_diagram
+
+  shell: User shell\n(insmod) { class: external }
+  loader: Linux module loader\n(kernel) { class: kernel_module }
+  pdrv: platform driver core\n(drivers/base/platform.c) { class: kernel_module }
+  oflk: OF / device-tree\nlookup { class: kernel_module }
+  probe_fn: pvz_probe\n(sw/pvz_driver.c:61-99) { class: kernel_module }
+  misc: misc subsystem\n(drivers/char/misc.c) { class: kernel_module }
+  devnode: /dev/pvz\n(misc device node) { class: external }
+
+  shell -> loader: "insmod pvz_driver.ko"
+
+  loader -> probe_fn: "module_init -> pvz_init\n(sw/pvz_driver.c:127-131)"
+
+  probe_fn.t1: "pr_info DRIVER_NAME: init\n(sw/pvz_driver.c:129)"
+
+  probe_fn -> pdrv: "platform_driver_probe(\n  &pvz_driver, pvz_probe)\nsw/pvz_driver.c:130"
+
+  pdrv -> oflk: "walk DT, match pvz_of_match[]\ncompatible = csee4840,pvz_gpu-1.0\n(sw/pvz_driver.c:111-115)"
+
+  oflk -> pdrv: "DT node match found"
+
+  pdrv -> probe_fn: "pvz_probe(pdev)\n(sw/pvz_driver.c:61)"
+
+  probe_fn -> misc: "misc_register(&pvz_misc_device)\nsw/pvz_driver.c:65"
+
+  misc -> devnode: "create /dev/pvz\n(MISC_DYNAMIC_MINOR)"
+
+  misc -> probe_fn: "ret = 0"
+
+  probe_fn -> oflk: "of_address_to_resource(\n  pdev->dev.of_node, 0, &dev.res)\nsw/pvz_driver.c:71"
+
+  oflk -> probe_fn: "dev.res.start = phys base\n(Avalon-MM lightweight bridge)"
+
+  probe_fn -> pdrv: "request_mem_region(\n  dev.res.start,\n  resource_size(&dev.res),\n  DRIVER_NAME)\nsw/pvz_driver.c:77-78"
+
+  pdrv -> probe_fn: "ok / -EBUSY"
+
+  probe_fn -> oflk: "dev.virtbase =\n  of_iomap(pdev->dev.of_node, 0)\nsw/pvz_driver.c:83"
+
+  oflk -> probe_fn: "kernel virtual address\nor NULL -> -ENOMEM"
+
+  probe_fn.t2: "pr_info DRIVER_NAME:\n  initialized at 0x%08lx\n(sw/pvz_driver.c:89-90)"
+
+  probe_fn -> loader: "return 0"
+
+  loader -> shell: "insmod returns 0"
+
+  devnode -> devnode: "ready for\nioctl PVZ_WRITE_REG"
+}
+
+note_probe_vs_register: "platform_driver_probe is used\n(not platform_driver_register)\nbecause the DT node already exists\nat insmod time (sw/pvz_driver.c:130).\nFailure paths in pvz_probe use the\nlabels out_release_mem_region and\nout_deregister for ordered teardown\n(sw/pvz_driver.c:94-98)." { class: note }
+
+note_order: "Inside pvz_probe the call order is:\n  1. misc_register\n  2. of_address_to_resource\n  3. request_mem_region\n  4. of_iomap\nThis order is what the design spec\nlocks down at sw/pvz_driver.c:61-99." { class: note }
+
+probe -> note_probe_vs_register: { style.stroke-dash: 3 }
+probe -> note_order: { style.stroke-dash: 3 }

@@ -1,0 +1,94 @@
+# Title:     Zombie eats plant flow
+# Section:   06-flow
+# Documents: sw/game.c, sw/game.h, hw/pvz_top.sv, hw/entity_drawer.sv
+# Defends:   How does a zombie stop, eat a plant, and resume — or trigger the lose state?
+# Detail:    block
+
+...@../common.d2
+
+direction: right
+
+entry: "Step 1: update_zombies (sw/game.c:103-156)" {
+  class: layer
+
+  loop: "for each zombie z in gs->zombies[]:\n  if (!z->active) continue" { class: sw_module }
+}
+
+branch: "Step 2: eating or moving?" {
+  class: layer
+
+  decide: "z->eating == 1 ?" { class: fsm_state }
+}
+
+move_path: "Step 3a: not eating (sw/game.c:136-154)" {
+  class: layer
+
+  step: "z->move_counter++\nif (move_counter >= ZOMBIE_SPEED_FRAMES (3)):\n  move_counter = 0\n  z->x_pixel--   // 1 px left every 3 frames" { class: sw_module }
+
+  lose_check: "z->x_pixel <= GAME_AREA_X ?\n(sw/game.c:143-145)" { class: fsm_state }
+  lose: "gs->state = STATE_LOSE\nreturn" { class: sw_module }
+
+  collide_check: "col = zombie_col(z->x_pixel)\ngrid[z->row][col].type\n!= PLANT_NONE ?" { class: fsm_state }
+  enter_eat: "z->eating = 1\nz->eat_timer = ZOMBIE_EAT_COOLDOWN (60)" { class: sw_module }
+  walk_on: "no plant in cell:\nkeep walking next frame" { class: note }
+
+  step -> lose_check
+  lose_check -> lose: "yes"
+  lose_check -> collide_check: "no"
+  collide_check -> enter_eat: "yes"
+  collide_check -> walk_on: "no" { style.stroke-dash: 3 }
+}
+
+eat_path: "Step 3b: eating (sw/game.c:110-134)" {
+  class: layer
+
+  recheck: "col = zombie_col(z->x_pixel)\ngrid[z->row][col].type\n== PLANT_NONE ?\n(sw/game.c:113-116)" { class: fsm_state }
+  cleared: "z->eating = 0\nz->eat_timer = 0\nfall through to movement\n(another zombie ate it)" { class: sw_module }
+
+  tick: "z->eat_timer--\neat_timer <= 0 ?" { class: fsm_state }
+  bite: "grid[z->row][col].hp--" { class: sw_module }
+  reset_timer: "eat_timer = ZOMBIE_EAT_COOLDOWN (60)\ncontinue (don't move while eating)" { class: sw_module }
+
+  killed: "grid[z->row][col].hp <= 0 ?" { class: fsm_state }
+  clear_cell: "grid[z->row][col].type = PLANT_NONE\ngrid[z->row][col].fire_cooldown = 0\ngrid[z->row][col].hp = 0\nz->eating = 0  // resume movement next frame" { class: sw_module }
+
+  recheck -> cleared: "yes"
+  recheck -> tick: "no"
+  tick -> bite: "yes"
+  tick -> reset_timer: "no, just decrement" { style.stroke-dash: 3 }
+  bite -> killed
+  killed -> clear_cell: "yes"
+  killed -> reset_timer: "no"
+}
+
+render: "Step 4: render_frame next frame" {
+  class: layer
+
+  out: "render_plants rebuilds the PLANTS\nand SUNFLOWER bitmaps; an eaten\ncell drops out of both.\nrender_zombies repacks all zombies\nwith their new x_pixel.\n(sw/render.c:32-66)" { class: sw_module }
+}
+
+fpga: "Step 5: FPGA repaints" {
+  class: layer
+
+  regfile: "pvz_top regfile\nplant_present / sunflower_present /\nzombie_alive[i] (hw/pvz_top.sv:114-126)" { class: hw_module }
+  drawer: "entity_drawer drops the eaten\nplant; zombie sprite resumes\nmoving when eating clears\n(hw/entity_drawer.sv)" { class: hw_module }
+}
+
+entry.loop -> branch.decide
+branch.decide -> eat_path.recheck: "yes"
+branch.decide -> move_path.step: "no"
+eat_path.cleared -> move_path.step: "(fall through this frame)" { style.stroke-dash: 3 }
+move_path.enter_eat -> render.out: "next frame"
+move_path.walk_on -> render.out: "next frame" { style.stroke-dash: 3 }
+move_path.lose -> render.out: "next frame" { style.stroke-dash: 3 }
+eat_path.clear_cell -> render.out: "next frame"
+eat_path.reset_timer -> render.out: "next frame" { style.stroke-dash: 3 }
+render.out -> fpga.regfile
+fpga.regfile -> fpga.drawer
+
+note_constants: "Constants (sw/game.h):\n  ZOMBIE_SPEED_FRAMES = 3 frames / px\n  ZOMBIE_EAT_COOLDOWN = 60 frames / bite\n  PLANT_HP            = 3 bites to kill\n  ZOMBIE_HP           = 3\nFloor 60 fps -> 1 bite/sec, plant dies in 3 s." { class: note }
+
+note_lose: "Lose condition: any zombie with\nx_pixel <= GAME_AREA_X (64) sets\ngs->state = STATE_LOSE\n(sw/game.c:143-145)." { class: note }
+
+entry -> note_constants: { style.stroke-dash: 3 }
+move_path.lose -> note_lose: { style.stroke-dash: 3 }

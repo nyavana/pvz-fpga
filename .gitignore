@@ -1,7 +1,12 @@
-# AI tool config (keep CLAUDE.md tracked — it's project instructions)
+# AI tool config (not tracked in the project repo)
 .claude/
 .codex/
 .gemini/
+/CLAUDE.md
+
+# Brainstorming / spec scratchpad — not for the project repo
+/docs/superpowers/
+/openspec/
 
 # OS junk
 .DS_Store

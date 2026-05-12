@@ -1,0 +1,71 @@
+# Title:     bg_grid — lawn checker
+# Section:   02-hw
+# Documents: hw/bg_grid.sv, hw/color_palette.sv, hw/pvz_top.sv
+# Defends:   How does the background color for each pixel get decided, and what are the grid geometry constants?
+# Detail:    block
+
+...@../common.d2
+
+direction: right
+
+bg_grid: "bg_grid\n(hw/bg_grid.sv)\nCombinational, no flops.\nMaps (px, py) -> 8-bit color index." {
+  class: hw_module
+
+  in_grid_test: "in_grid\n(bg_grid.sv:33-34)\nin_grid = (px >= 64) &&\n          (px <  64 + 512) &&\n          (py >= 112) &&\n          (py <  112 + 256)" {
+    class: signal
+  }
+
+  gx_gy: "gx = px - GRID_X\ngy = py - GRID_Y\n(bg_grid.sv:39-40)\n10-bit offsets inside the lawn." {
+    class: signal
+  }
+
+  light_cell: "light_cell = gx[6] ^ gy[6]\n(bg_grid.sv:45)\nXOR of the bit that flips every 64 px\ngives the checker parity." {
+    class: signal
+  }
+
+  mux: "always_comb (bg_grid.sv:47-54)\nif (!in_grid)       -> COL_BLUE        (13)\nelse if (light_cell) -> COL_LIGHT_GREEN (2)\nelse                 -> COL_DARK_GREEN  (1)" {
+    class: signal
+  }
+}
+
+px_in: "px[9:0]\n(from pvz_top: px = hcount[10:1])" { class: signal }
+py_in: "py[9:0]\n(from pvz_top: py = vcount)" { class: signal }
+color_out: "color_out[7:0]\n(consumed by entity_drawer.bg_color)" { class: signal }
+
+# Inputs feed the geometry test and the offset subtraction
+px_in -> bg_grid.in_grid_test
+py_in -> bg_grid.in_grid_test
+px_in -> bg_grid.gx_gy: "px - GRID_X"
+py_in -> bg_grid.gx_gy: "py - GRID_Y"
+
+# Offsets feed the parity test
+bg_grid.gx_gy -> bg_grid.light_cell: "gx[6], gy[6]"
+
+# Both the geometry test and parity feed the mux
+bg_grid.in_grid_test -> bg_grid.mux: "in_grid"
+bg_grid.light_cell   -> bg_grid.mux: "light_cell"
+
+bg_grid.mux -> color_out: "8-bit palette index"
+
+# Constants table — read from bg_grid.sv lines 22-31, no inventions
+constants: "Layout constants (bg_grid.sv:22-31)\nGRID_X         = 64    (lawn left edge in px)\nGRID_Y         = 112   (lawn top edge in px)\nGRID_W         = 512   (= 8 cols x 64)\nGRID_H         = 256   (= 4 rows x 64)\nCELL implicit  = 64    (= 2^6, hence bit slices)\nGRID_COLS      = 8\nGRID_ROWS      = 4" {
+  class: note
+}
+
+# Color indices used here — must match color_palette.sv
+colors: "Color indices written here\n(must match hw/color_palette.sv)\nCOL_BLACK       = 0  (declared but unused here)\nCOL_DARK_GREEN  = 1  -> dark grid cell\nCOL_LIGHT_GREEN = 2  -> light grid cell\nCOL_BLUE        = 13 -> outside-grid fill\n(bg_grid.sv:22-25)" {
+  class: note
+}
+
+geometry_note: "Cell math uses bit slices because 64 = 2^6.\nThe LSB of each cell index (gx[6], gy[6])\nis the only bit parity needs.\nNo divisor, no multiplier, no flops." {
+  class: note
+}
+
+outside_note: "Outside the 512x256 grid window the\nmodule emits a single non-checker color:\nCOL_BLUE = 13 (sky blue in color_palette).\nNo separate sky/HUD logic lives here." {
+  class: note
+}
+
+bg_grid -> constants: { style.stroke-dash: 3 }
+bg_grid.mux -> colors: { style.stroke-dash: 3 }
+bg_grid.light_cell -> geometry_note: { style.stroke-dash: 3 }
+bg_grid.in_grid_test -> outside_note: { style.stroke-dash: 3 }

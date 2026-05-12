@@ -1,0 +1,67 @@
+direction: down
+title: "SystemVerilog Module Hierarchy" {
+  near: top-center
+  shape: text
+  style.font-size: 22
+  style.bold: true
+}
+
+wrap: "soc_system_top.sv\n(board wrapper: pins -> Qsys)" {
+  style.fill: "#ffe6cc"
+}
+
+qsys: "soc_system.qsys / soc_system\n(Platform Designer generated)" {
+  style.fill: "#dae8fc"
+}
+
+hpsmod: "hps_0\n(hard processor, DDR3, USB, ENet)" {
+  style.fill: "#d5e8d4"
+}
+
+pvz: "pvz_top.sv\n(Avalon-MM slave + register file)" {
+  style.fill: "#fff2cc"
+}
+
+vgactr: "vga_counters.sv\n(640x480 @ 60 Hz timing)" {
+  style.fill: "#f8cecc"
+}
+
+bggrid: "bg_grid.sv\n(lawn checker, combinational)" {
+  style.fill: "#f8cecc"
+}
+
+drawer: "entity_drawer.sv\n(two-stage sprite compositor)" {
+  style.fill: "#f8cecc"
+}
+
+rom_p: "sprite_rom\n(peashooter_idx.mem)" {
+  style.fill: "#fad7ac"
+}
+
+rom_s: "sprite_rom\n(sunflower_idx.mem)" {
+  style.fill: "#fad7ac"
+}
+
+rom_z: "sprite_rom\n(zombie_idx.mem)" {
+  style.fill: "#fad7ac"
+}
+
+palette: "color_palette.sv\n(8-bit idx -> 24-bit RGB)" {
+  style.fill: "#f8cecc"
+}
+
+wrap -> qsys: instantiates
+qsys -> hpsmod
+qsys -> pvz: "Avalon-MM via h2f_lw bridge"
+
+pvz -> vgactr: "pixel coordinates"
+pvz -> bggrid: "bg color"
+pvz -> drawer: "px, py + register file"
+pvz -> rom_p: "1-cycle read"
+pvz -> rom_s: "1-cycle read"
+pvz -> rom_z: "1-cycle read"
+pvz -> palette: "index -> RGB"
+
+drawer -> rom_p: "plant_rd_addr"
+drawer -> rom_s: "shared addr"
+drawer -> rom_z: "zombie_rd_addr"

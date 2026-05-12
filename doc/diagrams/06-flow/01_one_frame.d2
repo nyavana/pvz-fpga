@@ -1,0 +1,53 @@
+# Title:     One frame, end-to-end
+# Section:   06-flow
+# Documents: sw/main.c, sw/game.c, sw/render.c, sw/pvz_driver.c, hw/pvz_top.sv, hw/entity_drawer.sv, hw/vga_counters.sv, hw/color_palette.sv
+# Defends:   What happens in one 16.67 ms frame, from a keypress to the pixel on the monitor?
+# Detail:    block
+
+...@../common.d2
+
+direction: right
+
+frame: "One frame, 16.67 ms / 60 Hz tick (main loop body at sw/main.c:110-150)" {
+  shape: sequence_diagram
+
+  keyboard: USB keyboard\n/dev/input/eventN { class: external }
+  app: pvz\n(sw/main.c) { class: sw_module }
+  driver: pvz_driver.ko\n(sw/pvz_driver.c) { class: kernel_module }
+  bus: Avalon-MM bus\n(lightweight HPS-to-FPGA bridge) { class: bus }
+  regfile: pvz_top regfile\n(hw/pvz_top.sv:95-148) { class: hw_module }
+  scanout: "VGA scanout\n(vga_counters, entity_drawer,\ncolor_palette)" { class: hw_module }
+  monitor: VGA monitor\n640x480 @ 60 Hz { class: external }
+
+  keyboard -> app: "evdev events\n(read by input_poll)"
+
+  app.t1: "process_input(&gs)\nsw/main.c:114\n(moves cursor, TAB toggle,\nSPACE places plant)" { class: sw_module }
+
+  app.t2: "game_update(&gs)\nsw/main.c:119\nphase order (sw/game.c:295-301):\nsun -> spawning -> firing ->\nprojectiles -> zombies ->\ncollisions -> win" { class: sw_module }
+
+  app.t3: "render_frame(&gs)\nsw/main.c:122\n(walks game state -> register file)" { class: sw_module }
+
+  app.t3 -> driver: "ioctl(PVZ_WRITE_REG, &arg)\n<= 51 calls per frame:\nPLANTS, SUNFLOWER, ZOMBIE[0..7],\nPEA[0..7], CURSOR, SUN, SELECTED"
+
+  driver -> bus: "iowrite32(value, virtbase + word*4)\nsw/pvz_driver.c:40"
+
+  bus -> regfile: "address[5:0], writedata[31:0],\nwrite, chipselect"
+
+  regfile -> regfile: "latch on posedge clk when\n(chipselect && write)\nNO vsync latching"
+
+  scanout <- regfile: "plant/sunflower/zombie/pea\nalive+x+row, cursor, sun,\nselected_plant (combinational fanout)"
+
+  scanout -> monitor: "VGA_R/G/B[7:0], VGA_HS, VGA_VS\n(racing the beam: entity_drawer\npaints pixel-by-pixel as the scan\nprogresses, no frame buffer)"
+
+  app.t4: "usleep(FRAME_USEC - elapsed)\nsw/main.c:147-149\n(pad to 16.67 ms)" { class: sw_module }
+}
+
+note_tearing: "16.67 ms / 60 Hz tick.  No vsync —\nioctl writes can race the VGA scan and\nproduce a one-frame tearing window.\nThe team judged this acceptable for\ngame-state updates at 60 Hz." { class: note }
+
+note_loop_order: "Exact call order in sw/main.c:\n  process_input(&gs)   :114\n  game_update(&gs)     :119\n  render_frame(&gs)    :122\nNo function called `game_tick(action)`\nexists on this branch." { class: note }
+
+note_writes: "render_frame issues at most 51 ioctls:\n  2 plant bitmaps (words 0, 1)\n  8 zombies (words 32..39)\n  8 peas (words 40..47)\n  cursor + sun + selected (words 48..50).\nAll iowrite32 in one syscall path." { class: note }
+
+frame -> note_tearing: { style.stroke-dash: 3 }
+frame -> note_loop_order: { style.stroke-dash: 3 }
+frame -> note_writes: { style.stroke-dash: 3 }

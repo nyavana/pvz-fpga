@@ -1,0 +1,60 @@
+# Title:     ioctl(PVZ_WRITE_REG) -- userspace to Avalon
+# Section:   04-interface
+# Documents: sw/render.c, sw/pvz.h, sw/pvz_driver.c, hw/pvz_top.sv
+# Defends:   What is the exact call stack for one register write, from `ioctl(fd, PVZ_WRITE_REG, ...)` to the FPGA latching writedata?
+# Detail:    block
+
+...@../common.d2
+
+direction: right
+
+shape: sequence_diagram
+
+user: "pvz userspace\n(sw/render.c write_reg() wraps\nioctl(fd, PVZ_WRITE_REG, &arg))" {
+  class: sw_module
+}
+
+vfs: "VFS / glibc\nioctl entry" {
+  class: external
+}
+
+drv_entry: "pvz_ioctl\n(sw/pvz_driver.c:30)" {
+  class: kernel_module
+}
+
+drv_copy: "copy_from_user\n(sw/pvz_driver.c:36)" {
+  class: kernel_module
+}
+
+drv_check: "bounds check\nw.word_index >= PVZ_NUM_REGS\n(sw/pvz_driver.c:38)" {
+  class: kernel_module
+}
+
+drv_iowrite: "iowrite32(w.value,\n  dev.virtbase + (w.word_index * 4))\n(sw/pvz_driver.c:40)" {
+  class: kernel_module
+}
+
+bus: "Avalon-MM bus\n(lightweight HPS-to-FPGA bridge,\nbase 0xFF20_0000)" {
+  class: bus
+}
+
+regfile: "pvz_top register file\n(hw/pvz_top.sv:95-148)" {
+  class: hw_module
+}
+
+user -> vfs: "ioctl(fd, PVZ_WRITE_REG, &arg)"
+vfs -> drv_entry: "dispatch via\npvz_fops.unlocked_ioctl"
+drv_entry -> drv_copy: "case PVZ_WRITE_REG"
+drv_copy -> drv_check: "arg.word_index, arg.value copied"
+drv_check -> drv_iowrite: "bounds check ok\n(word_index < PVZ_NUM_REGS=51)"
+drv_iowrite -> bus: "32-bit MMIO write\nbyte offset = word*4"
+bus -> regfile: "address = byte_offset >> 2\nchipselect && write asserted"
+regfile -> regfile: "latch on posedge clk\n(no vsync latching)"
+regfile -> drv_iowrite: "(no handshake; fire-and-forget)"
+drv_iowrite -> drv_entry: "return 0"
+drv_entry -> vfs: "long return value"
+vfs -> user: "ioctl returns 0\n(or -EINVAL / -EACCES)"
+
+return_note: "Return codes (sw/pvz_driver.c:30-47):\n  0        on success\n  -EINVAL  if w.word_index >= PVZ_NUM_REGS\n  -EACCES  if copy_from_user fails\nThe ioctl returns only an int; no data flows back\nfrom the FPGA on this path." {
+  class: note
+}

@@ -1,0 +1,97 @@
+# Title:     vga_counters — pixel-clock + sync generator
+# Section:   02-hw
+# Documents: hw/vga_counters.sv, hw/pvz_top.sv
+# Defends:   How are the VGA horizontal and vertical timing signals generated, and what pixel clock does the entity drawer see?
+# Detail:    block
+
+...@../common.d2
+
+direction: down
+
+vga_counters: "vga_counters\n(hw/vga_counters.sv)\n50 MHz in, 25 MHz pixel clock out.\nNo state beyond hcount/vcount." {
+  class: hw_module
+
+  hcount: "hcount[10:0]\nalways_ff (vga_counters.sv:41-44):\ncounts 0..HTOTAL-1 = 0..1599\nrolls over at end-of-line." {
+    class: signal
+  }
+
+  vcount: "vcount[9:0]\nalways_ff (vga_counters.sv:46-50):\ncounts 0..VTOTAL-1 = 0..524\nadvances on end-of-line, rolls over\nat end-of-field." {
+    class: signal
+  }
+
+  vga_clk: "VGA_CLK = hcount[0]\n(vga_counters.sv:66)\n50 MHz / 2 = 25 MHz pixel clock.\nLSB of hcount toggles every clk50 cycle." {
+    class: signal
+  }
+
+  vga_hs: "VGA_HS\n(vga_counters.sv:53-54)\nactive low during the horizontal\nsync pulse window\n(hcount[10:8] == 3'b101 &&\n hcount[7:5] != 3'b111)." {
+    class: signal
+  }
+
+  vga_vs: "VGA_VS\n(vga_counters.sv:57)\nactive low when vcount[9:1] == 245.\n245 = (VACTIVE + VFRONT_PORCH) / 2." {
+    class: signal
+  }
+
+  vga_blank_n: "VGA_BLANK_n\n(vga_counters.sv:62-63)\nactive high inside the visible 640x480\nregion; the bit math gates blanking on\nhcount[10] and vcount[9]." {
+    class: signal
+  }
+
+  vga_sync_n: "VGA_SYNC_n = 1'b0\n(vga_counters.sv:59)\ntied low; composite-sync-on-green\nis unused on this board." {
+    class: signal
+  }
+}
+
+clk50: "clk50 = CLOCK_50\n(50 MHz board oscillator,\nrouted via clk_0 in soc_system.qsys)" {
+  class: bus
+}
+
+reset: "reset\n(async, posedge sensitive)" {
+  class: signal
+}
+
+pixel_consumers: "Downstream consumers (in pvz_top)\nwire [9:0] px = hcount[10:1]; (pvz_top.sv:65)\nwire [9:0] py = vcount;        (pvz_top.sv:66)\nFed to bg_grid and entity_drawer." {
+  class: hw_module
+}
+
+# Clock + reset drive the counter flops
+clk50 -> vga_counters.hcount: "posedge clk50"
+clk50 -> vga_counters.vcount: "posedge clk50"
+reset -> vga_counters.hcount: "async clear -> 0"
+reset -> vga_counters.vcount: "async clear -> 0"
+
+# hcount derives pixel clock and horizontal sync
+vga_counters.hcount -> vga_counters.vga_clk: "hcount[0]"
+vga_counters.hcount -> vga_counters.vga_hs: "decode hcount[10:5]"
+vga_counters.hcount -> vga_counters.vcount: "endOfLine advances vcount"
+
+# vcount drives vertical sync
+vga_counters.vcount -> vga_counters.vga_vs: "decode vcount[9:1]"
+
+# Both feed the blanking gate
+vga_counters.hcount -> vga_counters.vga_blank_n: "hcount[10:8]"
+vga_counters.vcount -> vga_counters.vga_blank_n: "vcount[9:5]"
+
+# hcount[10:1] is the 800-step ramp; downstream consumers take the upper bits
+vga_counters.hcount -> pixel_consumers: "px = hcount[10:1] (640 active cols)"
+vga_counters.vcount -> pixel_consumers: "py = vcount (480 active rows)"
+
+# Timing constants table (640x480 @ 60 Hz, sourced from vga_counters.sv lines 23-33)
+htiming: "Horizontal timing (cycles of clk50)\nHACTIVE      = 1280  (640 logical px, x2)\nHFRONT_PORCH =   32\nHSYNC        =  192\nHBACK_PORCH  =   96\nHTOTAL       = 1600  (= 32 us per line)" {
+  class: note
+}
+
+vtiming: "Vertical timing (lines of clk50/HTOTAL)\nVACTIVE      = 480\nVFRONT_PORCH =  10\nVSYNC        =   2\nVBACK_PORCH  =  33\nVTOTAL       = 525  (= 16.67 ms per field, 60 Hz)" {
+  class: note
+}
+
+active_window: "Active window\nhcount in 0..1279 (px in 0..639);\nvcount in 0..479 (py in 0..479).\nOutside this window VGA_BLANK_n is low\nand pvz_top forces R/G/B = 0\n(pvz_top.sv:243-253)." {
+  class: note
+}
+
+pclk_note: "Pixel clock = clk50 / 2 = 25 MHz.\nPixels are output once per two hcount\nticks; entity_drawer sees\npx = hcount[10:1]." {
+  class: note
+}
+
+vga_counters -> htiming: { style.stroke-dash: 3 }
+vga_counters -> vtiming: { style.stroke-dash: 3 }
+vga_counters -> active_window: { style.stroke-dash: 3 }
+vga_counters.vga_clk -> pclk_note: { style.stroke-dash: 3 }

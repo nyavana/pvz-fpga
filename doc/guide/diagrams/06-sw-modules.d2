@@ -1,0 +1,55 @@
+direction: down
+title: "Software module dependencies" {
+  near: top-center
+  shape: text
+  style.font-size: 20
+  style.bold: true
+}
+
+userspace: "Userspace (/sw/pvz binary)" {
+  style.fill: "#f8f9fa"
+
+  main_c: "main.c\n60 Hz loop\nprocess_input + game_update + render_frame" {
+    style.fill: "#dae8fc"
+  }
+  game_c: "game.c + game.h\nsimulation: grid, zombies,\npeas, sun economy" {
+    style.fill: "#d5e8d4"
+  }
+  render_c: "render.c + render.h\ngame_state_t -> register writes" {
+    style.fill: "#fff2cc"
+  }
+  input_c: "input.c + input.h\n/dev/input/eventX evdev reader" {
+    style.fill: "#ffe6cc"
+  }
+}
+
+shared: "Shared header (sw/pvz.h)\nregister offsets, packing helpers,\nioctl struct, capacity constants" {
+  style.fill: "#fad7ac"
+}
+
+kernel: "Kernel module (pvz_driver.ko)\nplatform driver + misc device" {
+  style.fill: "#f8cecc"
+  driver_c: "pvz_driver.c\nprobe -> of_iomap\nioctl -> iowrite32" {
+    style.fill: "#f5c2c7"
+  }
+}
+
+dev_pvz: "/dev/pvz\n(misc character device)" {
+  shape: cylinder
+  style.fill: "#e1d5e7"
+}
+
+avalon: "Avalon-MM @ 0xff200000\n-> pvz_top in FPGA" {
+  shape: cylinder
+  style.fill: "#cfe2ff"
+}
+
+userspace.main_c -> userspace.game_c
+userspace.main_c -> userspace.render_c
+userspace.main_c -> userspace.input_c
+userspace.main_c -> shared
+userspace.render_c -> shared
+userspace.render_c -> dev_pvz: "ioctl(PVZ_WRITE_REG)"
+dev_pvz -> kernel.driver_c
+kernel.driver_c -> shared
+kernel.driver_c -> avalon: "iowrite32(virtbase + word*4)"

@@ -1,0 +1,127 @@
+# Title:     render.c - game state to FPGA registers
+# Section:   03-sw
+# Documents: sw/render.c, sw/render.h, sw/pvz.h, sw/game.h
+# Defends:   Which game-state fields does each render_* function read, and which Avalon-MM register words does it write?
+# Detail:    block
+
+...@../common.d2
+
+direction: right
+
+title: "render.c packs game_state_t into the FPGA register file.\nEvery write goes through write_reg(word_index, value)\n(sw/render.c:20-24), which calls ioctl(fd, PVZ_WRITE_REG, &arg).\nrender_frame issues at most 51 ioctls per frame; 21 are\nactually used (2 plant bitmaps + 8 zombies + 8 peas + cursor +\nsun + selected).  The decoder ignores word reads of 2..31." {
+  class: note
+}
+
+entry: "render_frame(gs)\nsw/render.c:108-124\nbranches on gs->state:\n  STATE_PLAYING -> render every layer\n  otherwise     -> hide_all_entities + sun + selected" {
+  class: sw_module
+}
+
+ri: "render_init(fpga_fd)\nsw/render.c:26-30\nstores fpga_fd in static fd\nused by every write_reg call" {
+  class: sw_module
+}
+
+# Render functions
+
+rp: "render_plants(gs)\nsw/render.c:32-47\nwalks gs->grid[4][8]; sets\n  pea_bits |= 1u << (r*8+c)  on PLANT_PEASHOOTER\n  sun_bits |= 1u << (r*8+c)  on PLANT_SUNFLOWER" {
+  class: sw_module
+}
+w_plants:   "word 0  PVZ_REG_PLANTS\n32-bit peashooter bitmap" { class: register }
+w_sun_bm:   "word 1  PVZ_REG_SUNFLOWER\n32-bit sunflower bitmap" { class: register }
+
+rz: "render_zombies(gs)\nsw/render.c:55-66\nfor i = 0..PVZ_MAX_ZOMBIES-1 (= 0..7):\n  if active: pack (alive=1, row, x_pixel)\n  else:      pack (alive=0, 0, 0)\nuses pvz_pack_entity (sw/pvz.h:52-57):\n  {alive[31], row[11:10], x_pixel[9:0]}" {
+  class: sw_module
+}
+w_z0: "word 32  PVZ_REG_ZOMBIE(0)" { class: register }
+w_z1: "word 33  PVZ_REG_ZOMBIE(1)" { class: register }
+w_z2: "word 34  PVZ_REG_ZOMBIE(2)" { class: register }
+w_z3: "word 35  PVZ_REG_ZOMBIE(3)" { class: register }
+w_z4: "word 36  PVZ_REG_ZOMBIE(4)" { class: register }
+w_z5: "word 37  PVZ_REG_ZOMBIE(5)" { class: register }
+w_z6: "word 38  PVZ_REG_ZOMBIE(6)" { class: register }
+w_z7: "word 39  PVZ_REG_ZOMBIE(7)" { class: register }
+
+rpea: "render_peas(gs)\nsw/render.c:68-81\ncompacts gs->projectiles[16] into 8 hw slots:\n  iterate active peas, fill slot 0..7\n  unused slots get value 0 (hides them)" {
+  class: sw_module
+}
+w_p0: "word 40  PVZ_REG_PEA(0)" { class: register }
+w_p1: "word 41  PVZ_REG_PEA(1)" { class: register }
+w_p2: "word 42  PVZ_REG_PEA(2)" { class: register }
+w_p3: "word 43  PVZ_REG_PEA(3)" { class: register }
+w_p4: "word 44  PVZ_REG_PEA(4)" { class: register }
+w_p5: "word 45  PVZ_REG_PEA(5)" { class: register }
+w_p6: "word 46  PVZ_REG_PEA(6)" { class: register }
+w_p7: "word 47  PVZ_REG_PEA(7)" { class: register }
+
+rc: "render_cursor(gs)\nsw/render.c:83-88\nvisible = (state == STATE_PLAYING)\npvz_pack_cursor(visible, row, col) (sw/pvz.h:60-65):\n  {visible[31], col[4:2], row[1:0]}" {
+  class: sw_module
+}
+w_cur: "word 48  PVZ_REG_CURSOR" { class: register }
+
+rs: "render_sun(gs)\nsw/render.c:90-95\nwrites gs->sun & 0x3FFF\n(14-bit sun count)" {
+  class: sw_module
+}
+w_sun: "word 49  PVZ_REG_SUN" { class: register }
+
+rsel: "render_selected(gs)\nsw/render.c:49-53\nwrites 0 for PLANT_PEASHOOTER,\n       1 for PLANT_SUNFLOWER" {
+  class: sw_module
+}
+w_sel: "word 50  PVZ_REG_SELECTED" { class: register }
+
+hide: "hide_all_entities()\nsw/render.c:97-106\ncalled when state != STATE_PLAYING:\n  zero words 0, 1, 32..39, 40..47, 48\n  then render_sun + render_selected still run" {
+  class: sw_module
+}
+
+# entry -> functions
+entry -> rp:   "if STATE_PLAYING"
+entry -> rz:   "if STATE_PLAYING"
+entry -> rpea: "if STATE_PLAYING"
+entry -> rc:   "if STATE_PLAYING"
+entry -> rs:   "always"
+entry -> rsel: "always"
+entry -> hide: "if state != STATE_PLAYING"
+
+# render_init feeds fd
+ri -> entry: "fd cached for write_reg" { style.stroke-dash: 3 }
+
+# function -> registers
+rp -> w_plants
+rp -> w_sun_bm
+rz -> w_z0
+rz -> w_z1
+rz -> w_z2
+rz -> w_z3
+rz -> w_z4
+rz -> w_z5
+rz -> w_z6
+rz -> w_z7
+rpea -> w_p0
+rpea -> w_p1
+rpea -> w_p2
+rpea -> w_p3
+rpea -> w_p4
+rpea -> w_p5
+rpea -> w_p6
+rpea -> w_p7
+rc   -> w_cur
+rs   -> w_sun
+rsel -> w_sel
+
+# hide also targets the same registers (zero writes)
+hide -> w_plants: "0" { style.stroke-dash: 3 }
+hide -> w_sun_bm: "0" { style.stroke-dash: 3 }
+hide -> w_z0:     "0" { style.stroke-dash: 3 }
+hide -> w_p0:     "0" { style.stroke-dash: 3 }
+hide -> w_cur:    "0" { style.stroke-dash: 3 }
+
+# Underlying mechanism
+mech: "write_reg(word_index, value)\nsw/render.c:20-24\nbuilds pvz_write_arg_t and issues\nioctl(fd, PVZ_WRITE_REG, &arg).\n=> one ioctl => one iowrite32." {
+  class: note
+}
+
+count_note: "Per-frame ioctl count (STATE_PLAYING):\n  render_plants:  2\n  render_zombies: 8\n  render_peas:    8\n  render_cursor:  1\n  render_sun:     1\n  render_selected:1\n  -------------------\n  total:         21\nThe decoder accepts indices 0..50 (PVZ_NUM_REGS=51);\nthe range 2..31 is not used by render." {
+  class: note
+}
+
+w_plants -> mech: { style.stroke-dash: 3 }
+entry    -> count_note: { style.stroke-dash: 3 }
+title    -> entry: { style.stroke-dash: 3 }

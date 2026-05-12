@@ -1,0 +1,178 @@
+# Title:     pvz_top Avalon register-file decoder (signal-level)
+# Section:   02-hw
+# Documents: hw/pvz_top.sv (module header 22-28, Avalon ports 34-38, register state 70-90, decoder 95-148, packer 150-161), hw/entity_drawer.sv
+# Defends:   How does pvz_top decode an Avalon-MM write into the 21 live registers, and what is the exact bit-slice that lands in each slot?
+# Detail:    signal
+
+...@../common.d2
+
+direction: down
+
+# ---------------------------------------------------------------
+# Avalon-MM slave port (hw/pvz_top.sv:34-38)
+# Address is in WORDS (qsys addressUnits = WORDS). Header notes
+# at hw/pvz_top.sv:22-28 spell out the byte-vs-word convention and
+# explicitly accept the no-vsync-latching trade-off.
+# ---------------------------------------------------------------
+avalon: "Avalon-MM slave port (hw/pvz_top.sv:34-38)" {
+  class: layer
+  direction: down
+
+  address:    "address[5:0]\n(word index, 0..63 representable;\n0, 1, 32..50 live; 2..31 alias)" { class: signal }
+  writedata:  "writedata[31:0]" { class: signal }
+  write:      "write  (1)"      { class: signal }
+  chipselect: "chipselect  (1)" { class: signal }
+  clk_reset:  "clk  (1)\nreset  (1, async)" { class: signal }
+}
+
+# ---------------------------------------------------------------
+# Decoder: always_ff @(posedge clk or posedge reset)
+# (hw/pvz_top.sv:95-148)
+# ---------------------------------------------------------------
+decoder: "Register-file decoder\nalways_ff @(posedge clk or posedge reset)\nhw/pvz_top.sv:95-148" {
+  class: hw_module
+  direction: down
+
+  reset_arm: "ASYNC RESET branch (lines 96-111)\nClears every register:\n  plant_present       <= 32'd0\n  sunflower_present   <= 32'd0\n  selected_plant      <= 2'd0\n  zombie_alive        <= 8'd0\n  pea_alive           <= 8'd0\n  cursor_visible      <= 1'b0\n  cursor_col          <= 3'd0\n  cursor_row          <= 2'd0\n  sun_value           <= 14'd0\n  for i in 0..7:\n    zombie_x[i]       <= 10'd0\n    zombie_row[i]     <= 2'd0\n    pea_x[i]          <= 10'd0\n    pea_row[i]        <= 2'd0" { class: note }
+
+  write_guard: "WRITE branch guard\nelse if (chipselect && write)\nat line 112" { class: signal }
+
+  d_plant:  "address == 6'd0\nplant_present[31:0]     <= writedata[31:0]\n(line 114-116)" { class: signal }
+  d_sun:    "address == 6'd1\nsunflower_present[31:0] <= writedata[31:0]\n(line 117-120)" { class: signal }
+  d_zombie: "else if (address < 6'd40)\nzombie_alive[address[2:0]] <= writedata[31]\nzombie_x[address[2:0]]     <= writedata[9:0]\nzombie_row[address[2:0]]   <= writedata[11:10]\n(line 122-126)  [THE ALIASING GOTCHA]" { class: signal }
+  d_pea:    "else if (address < 6'd48)\npea_alive[address[2:0]] <= writedata[31]\npea_x[address[2:0]]     <= writedata[9:0]\npea_row[address[2:0]]   <= writedata[11:10]\n(line 128-132)" { class: signal }
+  d_cursor: "else if (address == 6'd48)\ncursor_visible <= writedata[31]\ncursor_col     <= writedata[4:2]\ncursor_row     <= writedata[1:0]\n(line 134-138)" { class: signal }
+  d_sunval: "else if (address == 6'd49)\nsun_value[13:0] <= writedata[13:0]\n(line 140-142)" { class: signal }
+  d_select: "else if (address == 6'd50)\nselected_plant[1:0] <= writedata[1:0]\n(line 144-146)" { class: signal }
+}
+
+# ---------------------------------------------------------------
+# Register state (hw/pvz_top.sv:70-90)
+# ---------------------------------------------------------------
+regs: "Register state (lines 70-90)" {
+  class: layer
+  direction: down
+
+  r_plant:      "plant_present[31:0]"                                    { class: register }
+  r_sunflower:  "sunflower_present[31:0]"                                { class: register }
+  r_selected:   "selected_plant[1:0]"                                    { class: register }
+  r_zalive:     "zombie_alive[7:0]"                                      { class: register }
+  r_palive:     "pea_alive[7:0]"                                         { class: register }
+  r_zx:         "zombie_x[0:7]    each [9:0]"                            { class: register }
+  r_zr:         "zombie_row[0:7]  each [1:0]"                            { class: register }
+  r_px:         "pea_x[0:7]       each [9:0]"                            { class: register }
+  r_pr:         "pea_row[0:7]     each [1:0]"                            { class: register }
+  r_cvis:       "cursor_visible  (1)"                                    { class: register }
+  r_ccol:       "cursor_col[2:0]"                                        { class: register }
+  r_crow:       "cursor_row[1:0]"                                        { class: register }
+  r_sun:        "sun_value[13:0]"                                        { class: register }
+}
+
+# ---------------------------------------------------------------
+# Packer: generate block (hw/pvz_top.sv:150-161)
+# Builds wide buses for entity_drawer ports.
+# ---------------------------------------------------------------
+packer: "Generate block packer (lines 153-161)" {
+  class: hw_module
+  direction: down
+
+  zx_pack:  "zombie_x_packed[gi*10 +: 10]   = zombie_x[gi]\n(width 80b)"  { class: signal }
+  zr_pack:  "zombie_row_packed[gi*2 +: 2]  = zombie_row[gi]\n(width 16b)" { class: signal }
+  px_pack:  "pea_x_packed[gi*10 +: 10]      = pea_x[gi]\n(width 80b)"      { class: signal }
+  pr_pack:  "pea_row_packed[gi*2 +: 2]     = pea_row[gi]\n(width 16b)"     { class: signal }
+}
+
+# ---------------------------------------------------------------
+# Outputs to entity_drawer
+# ---------------------------------------------------------------
+to_drawer: "To entity_drawer (instance hw/pvz_top.sv:205-230)" {
+  class: layer
+  direction: down
+
+  o_plant:      "plant_present[31:0]"      { class: signal }
+  o_sunflower:  "sunflower_present[31:0]"  { class: signal }
+  o_selected:   "selected_plant[1:0]"      { class: signal }
+  o_zalive:     "zombie_alive[7:0]"        { class: signal }
+  o_zxpack:     "zombie_x_packed[79:0]"    { class: signal }
+  o_zrpack:     "zombie_row_packed[15:0]"  { class: signal }
+  o_palive:     "pea_alive[7:0]"           { class: signal }
+  o_pxpack:     "pea_x_packed[79:0]"       { class: signal }
+  o_prpack:     "pea_row_packed[15:0]"     { class: signal }
+  o_cvis:       "cursor_visible  (1)"      { class: signal }
+  o_ccol:       "cursor_col[2:0]"          { class: signal }
+  o_crow:       "cursor_row[1:0]"          { class: signal }
+  o_sun:        "sun_value[13:0]"          { class: signal }
+}
+
+# ---------------------------------------------------------------
+# Wiring: Avalon -> decoder
+# ---------------------------------------------------------------
+avalon.address    -> decoder.write_guard: "address[5:0]"
+avalon.writedata  -> decoder.write_guard: "writedata[31:0]"
+avalon.write      -> decoder.write_guard: "write (1)"
+avalon.chipselect -> decoder.write_guard: "chipselect (1)"
+avalon.clk_reset  -> decoder.reset_arm:   "clk (1), reset (1)"
+
+decoder.write_guard -> decoder.d_plant:  "address == 6'd0"
+decoder.write_guard -> decoder.d_sun:    "address == 6'd1"
+decoder.write_guard -> decoder.d_zombie: "address < 6'd40"
+decoder.write_guard -> decoder.d_pea:    "address < 6'd48"
+decoder.write_guard -> decoder.d_cursor: "address == 6'd48"
+decoder.write_guard -> decoder.d_sunval: "address == 6'd49"
+decoder.write_guard -> decoder.d_select: "address == 6'd50"
+
+# ---------------------------------------------------------------
+# Wiring: decoder branches -> register slots
+# Label every edge with the exact bit slice of writedata that lands.
+# ---------------------------------------------------------------
+decoder.d_plant   -> regs.r_plant:     "writedata[31:0]"
+decoder.d_sun     -> regs.r_sunflower: "writedata[31:0]"
+
+decoder.d_zombie  -> regs.r_zalive:    "writedata[31] -> zombie_alive[address[2:0]]"
+decoder.d_zombie  -> regs.r_zx:        "writedata[9:0]   -> zombie_x[address[2:0]] (10b)"
+decoder.d_zombie  -> regs.r_zr:        "writedata[11:10] -> zombie_row[address[2:0]] (2b)"
+
+decoder.d_pea     -> regs.r_palive:    "writedata[31] -> pea_alive[address[2:0]]"
+decoder.d_pea     -> regs.r_px:        "writedata[9:0]   -> pea_x[address[2:0]] (10b)"
+decoder.d_pea     -> regs.r_pr:        "writedata[11:10] -> pea_row[address[2:0]] (2b)"
+
+decoder.d_cursor  -> regs.r_cvis:      "writedata[31]"
+decoder.d_cursor  -> regs.r_ccol:      "writedata[4:2]"
+decoder.d_cursor  -> regs.r_crow:      "writedata[1:0]"
+
+decoder.d_sunval  -> regs.r_sun:       "writedata[13:0]"
+decoder.d_select  -> regs.r_selected:  "writedata[1:0]"
+
+# ---------------------------------------------------------------
+# Wiring: registers -> packer -> drawer inputs
+# ---------------------------------------------------------------
+regs.r_zx -> packer.zx_pack: "8 x [9:0]"
+regs.r_zr -> packer.zr_pack: "8 x [1:0]"
+regs.r_px -> packer.px_pack: "8 x [9:0]"
+regs.r_pr -> packer.pr_pack: "8 x [1:0]"
+
+packer.zx_pack -> to_drawer.o_zxpack: "zombie_x_packed[79:0]"
+packer.zr_pack -> to_drawer.o_zrpack: "zombie_row_packed[15:0]"
+packer.px_pack -> to_drawer.o_pxpack: "pea_x_packed[79:0]"
+packer.pr_pack -> to_drawer.o_prpack: "pea_row_packed[15:0]"
+
+regs.r_plant     -> to_drawer.o_plant:     "[31:0]"
+regs.r_sunflower -> to_drawer.o_sunflower: "[31:0]"
+regs.r_selected  -> to_drawer.o_selected:  "[1:0]"
+regs.r_zalive    -> to_drawer.o_zalive:    "[7:0]"
+regs.r_palive    -> to_drawer.o_palive:    "[7:0]"
+regs.r_cvis      -> to_drawer.o_cvis:      "(1)"
+regs.r_ccol      -> to_drawer.o_ccol:      "[2:0]"
+regs.r_crow      -> to_drawer.o_crow:      "[1:0]"
+regs.r_sun       -> to_drawer.o_sun:       "[13:0]"
+
+# ---------------------------------------------------------------
+# Annotations
+# ---------------------------------------------------------------
+
+note_tearing: "NO vsync latching\nWrites take effect on the next clk edge regardless of\nwhere the VGA scan is.  A write that races the scan\nproduces one frame of tearing.  The header comment at\nhw/pvz_top.sv:25-27 accepts this trade-off." { class: note }
+
+note_alias: "ALIAS GOTCHA\n`else if (address < 6'd40)` at hw/pvz_top.sv:122 means\nEVERY word write in `address 2..31` (inclusive) folds\ninto the zombie register slot, with the slot index =\naddress[2:0].  Software must NEVER write words 2..31.\nThe register-map cheat sheet\n(04-interface/03_register_map_cheatsheet.d2) calls\nthis out too." { class: note }
+
+decoder -> note_tearing: { style.stroke-dash: 3 }
+decoder.d_zombie -> note_alias: { style.stroke-dash: 3 }
