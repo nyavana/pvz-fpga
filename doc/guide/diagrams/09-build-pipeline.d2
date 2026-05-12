@@ -1,0 +1,74 @@
+direction: right
+title: "Build pipeline: sources -> tools -> artifacts -> board" {
+  near: top-center
+  shape: text
+  style.font-size: 20
+  style.bold: true
+}
+
+hw_sources: "hw/ sources\n.sv, .qsys, .tcl, .mem" {
+  style.fill: "#fff2cc"
+}
+
+quartus: "Quartus + Platform Designer\nmake qsys -> make quartus" {
+  style.fill: "#dae8fc"
+}
+
+rbf: "soc_system.rbf\n(FPGA bitstream)" {
+  style.fill: "#f8cecc"
+  shape: page
+}
+
+dtc: "sopc2dts + dtc\nmake dtb" {
+  style.fill: "#dae8fc"
+}
+
+dtb: "soc_system.dtb\n(device tree blob)" {
+  style.fill: "#f8cecc"
+  shape: page
+}
+
+sw_sources: "sw/ sources\n.c, .h, Makefile" {
+  style.fill: "#fff2cc"
+}
+
+cc: "arm-linux-gnueabihf-gcc\n+ kbuild against\nlinux-headers-4.19\nmake (in sw/)" {
+  style.fill: "#dae8fc"
+}
+
+ko: "pvz_driver.ko\n(kernel module)" {
+  style.fill: "#d4edda"
+  shape: page
+}
+
+bin: "pvz\n(userspace binary)" {
+  style.fill: "#d4edda"
+  shape: page
+}
+
+sd: "SD card FAT partition\n(plug into board)" {
+  shape: cylinder
+  style.fill: "#ffe5d0"
+}
+
+home: "Board home dir\n(scp over network)" {
+  shape: cylinder
+  style.fill: "#ffe5d0"
+}
+
+board: "DE1-SoC\nboots Linux,\nloads bitstream,\ninsmod + run" {
+  style.fill: "#cfe2ff"
+}
+
+hw_sources -> quartus -> rbf
+quartus -> dtc -> dtb
+rbf -> sd
+dtb -> sd
+
+sw_sources -> cc -> ko
+cc -> bin
+ko -> home
+bin -> home
+
+sd -> board
+home -> board

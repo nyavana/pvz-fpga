@@ -1,0 +1,63 @@
+direction: right
+title: "Sprite ROM addressing (64 x 64 palette-indexed)" {
+  near: top-center
+  shape: text
+  style.font-size: 20
+  style.bold: true
+}
+
+input_box: |md
+  Pixel coordinate inside the grid cell
+
+  `in_cell_x[5:0]`, `in_cell_y[5:0]`
+
+  0..63 each
+| {
+  style.fill: "#dae8fc"
+}
+
+addr_box: |md
+  12-bit ROM address
+
+  `addr = in_cell_y * 64 + in_cell_x`
+| {
+  style.fill: "#fff2cc"
+}
+
+rom_box: |md
+  sprite_rom.sv
+
+  4096 bytes (1 M10K BRAM)
+
+  loaded from MEM_FILE via $readmemh
+
+  1-cycle synchronous read
+| {
+  style.fill: "#d5e8d4"
+}
+
+pixel_box: |md
+  8-bit palette index
+
+  `0x00 .. 0x0C` paint that color
+
+  `0xFF` transparent (skip)
+| {
+  style.fill: "#f8cecc"
+}
+
+palette_box: |md
+  color_palette.sv
+
+  256-entry LUT
+
+  index -> 24-bit RGB
+| {
+  style.fill: "#e1d5e7"
+}
+
+vga: "to VGA DAC pins" {
+  shape: cylinder
+}
+
+input_box -> addr_box -> rom_box -> pixel_box -> palette_box -> vga

@@ -1,0 +1,55 @@
+direction: right
+title: "VGA 640x480 @ 60 Hz timing (50 MHz input clock)" {
+  near: top-center
+  shape: text
+  style.font-size: 20
+  style.bold: true
+}
+
+note_top: "Each VGA pixel = 2 input clocks (25 MHz pixel rate). HCOUNT counts 0..1599, VCOUNT counts 0..524." {
+  near: top-left
+  shape: text
+  style.font-size: 12
+}
+
+hline_grp: "Horizontal: one scan line = HTOTAL = 1600 input clocks" {
+  shape: text
+  style.font-size: 14
+  style.bold: true
+}
+
+h_active: "HACTIVE\n0 ... 1279\n(640 pixels visible)" {
+  style.fill: "#d1e7dd"
+}
+h_fp: "HFRONT_PORCH\n+32 clocks" {
+  style.fill: "#fff3cd"
+}
+h_sync: "HSYNC\n+192 clocks\n(VGA_HS low)" {
+  style.fill: "#f5c2c7"
+}
+h_bp: "HBACK_PORCH\n+96 clocks" {
+  style.fill: "#fff3cd"
+}
+
+h_active -> h_fp -> h_sync -> h_bp
+
+vline_grp: "Vertical: one frame = VTOTAL = 525 lines" {
+  shape: text
+  style.font-size: 14
+  style.bold: true
+}
+
+v_active: "VACTIVE\n0 ... 479\n(480 lines visible)" {
+  style.fill: "#d1e7dd"
+}
+v_fp: "VFRONT_PORCH\n+10 lines" {
+  style.fill: "#fff3cd"
+}
+v_sync: "VSYNC\n+2 lines\n(VGA_VS low)" {
+  style.fill: "#f5c2c7"
+}
+v_bp: "VBACK_PORCH\n+33 lines" {
+  style.fill: "#fff3cd"
+}
+
+v_active -> v_fp -> v_sync -> v_bp

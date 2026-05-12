@@ -1,0 +1,61 @@
+direction: right
+title: "End-to-end data flow for one frame" {
+  near: top-center
+  shape: text
+  style.font-size: 20
+  style.bold: true
+}
+
+usb: "USB gamepad\nbutton press" {
+  style.fill: "#ffe5d0"
+}
+
+evdev: "Linux evdev\n/dev/input/event0\nstruct input_event" {
+  style.fill: "#fff3cd"
+}
+
+input_c: "input.c\ninput_poll()\nreturns INPUT_SPACE" {
+  style.fill: "#ffe6cc"
+}
+
+main_c: "main.c\nprocess_input ->\ngame_place_plant" {
+  style.fill: "#dae8fc"
+}
+
+game_c: "game.c\ngame_update:\nupdate_sun, _spawning,\n_firing, _projectiles,\n_zombies, _collisions" {
+  style.fill: "#d5e8d4"
+}
+
+render_c: "render.c\nrender_frame() ->\n~50 ioctl writes" {
+  style.fill: "#fff2cc"
+}
+
+driver: "pvz_driver.ko\nioctl handler ->\niowrite32 at\nvirtbase + word*4" {
+  style.fill: "#f8cecc"
+}
+
+avalon: "Avalon-MM\nh2f lightweight\nbridge" {
+  style.fill: "#cfe2ff"
+}
+
+pvz_top: "pvz_top.sv\nregister file\nlatches new value" {
+  style.fill: "#fff2cc"
+}
+
+entity_drawer: "entity_drawer.sv\nstage 1: hit check\nstage 2: mux + palette" {
+  style.fill: "#f8cecc"
+}
+
+vga: "VGA monitor\nshows new plant\nnext frame" {
+  shape: cylinder
+  style.fill: "#d4edda"
+}
+
+usb -> evdev -> input_c -> main_c -> game_c -> render_c
+render_c -> driver -> avalon -> pvz_top -> entity_drawer -> vga
+
+sleep: "usleep until\n16.667 ms\nelapsed" {
+  style.fill: "#e1d5e7"
+}
+
+main_c -> sleep: "after render"
