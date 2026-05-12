@@ -60,7 +60,7 @@ v5-cursor-controller/doc/diagrams/
   02-hw/             FPGA module diagrams (9 diagrams)
   03-sw/             HPS userspace + kernel diagrams (7 diagrams)
   04-interface/      HW↔SW boundary (4 diagrams)
-  05-cross-cutting/  timing, build, deploy, test (6 diagrams)
+  05-cross-cutting/  timing, build, boot (5 diagrams)
   06-flow/           end-to-end scenario diagrams (6 diagrams)
 ```
 
@@ -102,7 +102,7 @@ defines the recommended presentation order within a section.
 | `planned`       | Unused in v1 of catalog (kept for future "planned" overlays) |
 | `note`          | Annotation callouts (constants, latency, caveats)            |
 
-## 4. Catalog (36 diagrams)
+## 4. Catalog (35 diagrams)
 
 ### Section 1 — System / context (4)
 
@@ -132,10 +132,10 @@ defines the recommended presentation order within a section.
 | # | File | What it shows |
 |---|------|---------------|
 | 14 | `03-sw/01_process_architecture.d2` | `pvz` userspace binary (main.c, game.c, render.c, input.c), `pvz_driver.ko` in kernel column, `/dev/pvz` and `/dev/input/eventN` as open FDs. |
-| 15 | `03-sw/02_kernel_driver.d2` | Module init (`platform_driver_register`, `probe`, `of_iomap`, `misc_register`); ioctl path (`pvz_ioctl(PVZ_WRITE_REG)` → `copy_from_user` → `iowrite32`); cleanup. |
+| 15 | `03-sw/02_kernel_driver.d2` | Module init (`pvz_init` → `platform_driver_probe(&pvz_driver, pvz_probe)`) and probe sequence in source order (`misc_register` → `of_address_to_resource` → `request_mem_region` → `of_iomap`); ioctl path (`pvz_ioctl(PVZ_WRITE_REG)` → `copy_from_user` → bounds check → `iowrite32(virtbase + word*4)`); cleanup via `pvz_remove`. |
 | 16 | `03-sw/03_game_state_er.d2` | ER-style picture of `game_state` from `game.h`: `grid[4][8]`, `zombies[8]`, `peas[8]`, `cursor`, `sun`, `selected`, `frame_count`, `state`. |
 | 17 | `03-sw/04_game_loop_fsm.d2` | INIT → PLAYING → (PAUSED?) → WIN/LOSE → exit, with transition conditions from `game.c`. |
-| 18 | `03-sw/05_game_update_flow.d2` | Per-tick order inside `game_tick()`: advance zombies, eat-check, advance peas, pea/zombie collision, spawn check, sun accumulator, win/lose check. |
+| 18 | `03-sw/05_game_update_flow.d2` | Per-tick order inside `game_update()` (sw/game.c:288): `update_sun` → `update_spawning` → `update_firing` → `update_projectiles` → `update_zombies` (sets STATE_LOSE on x_pixel ≤ GAME_AREA_X) → `check_collisions` → `check_win`. Input handled separately by `process_input` in sw/main.c. |
 | 19 | `03-sw/06_input_pipeline.d2` | `open("/dev/input/eventN")` → poll loop → decode `struct input_event` → map to {UP, DOWN, LEFT, RIGHT, SPACE, D, TAB, ESC} → game state. |
 | 20 | `03-sw/07_render_mapping.d2` | `render.c` mapping: game-state field → FPGA register word. |
 
@@ -148,27 +148,28 @@ defines the recommended presentation order within a section.
 | 23 | `04-interface/03_register_map_cheatsheet.d2` | Tall table-style diagram: all 51 words — index, name, bit layout, semantics, SW writer, HW consumer. The reference card. |
 | 24 | `04-interface/04_device_tree_binding.d2` | `pvz_top_hw.tcl` → qsys `.sopcinfo` → `sopc2dts` → `.dts` → `dtc` → `.dtb` → kernel reads at boot → driver `of_match_table` matches `csee4840,pvz_gpu-1.0`. |
 
-### Section 5 — Cross-cutting (6)
+### Section 5 — Cross-cutting (5)
 
 | # | File | What it shows |
 |---|------|---------------|
-| 25 | `05-cross-cutting/01_frame_timing.d2` | 16.67 ms (60 Hz) timeline: input poll, game update, register writes (≤51), wait, next tick. Tearing window relative to VGA refresh. |
+| 25 | `05-cross-cutting/01_frame_timing.d2` | 16.67 ms (60 Hz) timeline: `process_input`, `game_update`, `render_frame` register writes (≤51), `usleep` to next tick. Tearing window relative to VGA refresh. |
 | 26 | `05-cross-cutting/02_vga_timing.d2` | VGA 640×480@60Hz: 25 MHz pixel clock; hsync/vsync porches; hcount 0–799, vcount 0–524; active vs blanking. |
-| 27 | `05-cross-cutting/03_pixel_pipeline_timing.d2` | `entity_drawer` 2-cycle pipeline: cycle 1 issues ROM addresses, cycle 2 merges + registers. Pixel-lead-by-one timing. |
-| 28 | `05-cross-cutting/04_build_pipeline.d2` | Three lanes joining at the SD card / on-board install: (a) **HW** on workstation: `make qsys` → `quartus` → `.sof` → `.rbf`; `make dtb` → `.dtb`. (b) **SW native (on-board)**: `make module` → `pvz_driver.ko`; `make pvz`; `make test_*`. (c) **SW cross-compile via GitHub Actions** (`.github/workflows/build.yml`): push → `build-sw` (ARM cross-compile of driver, game, tests via `arm-linux-gnueabihf-gcc` + kernel headers 4.19.0); `test-host` (`test_game` natively); on `v*` tag → `release` job attaches ARM binaries + `deploy.sh` to a GitHub Release. |
-| 29 | `05-cross-cutting/05_boot_deploy.d2` | Two layered flows. Cold boot: power on → preloader → U-Boot → `fatload mmc 0:1 soc_system.rbf` → `fpga load 0` → `run bridge_enable_handoff` → Linux + DTB → root FS → login. On-board install/run via `deploy.sh`: `setup` (kernel headers) → `download` (gh release) → `install` (`insmod pvz_driver.ko`) → `run` (`./pvz`) → `test <name>` / `status`. `shape: sequence_diagram`. |
-| 30 | `05-cross-cutting/06_test_architecture.d2` | Three surfaces: ModelSim TBs (HW), on-board `test_shapes` / `test_input` (HW+driver), host-side `test_game` (game.c only). |
+| 27 | `05-cross-cutting/03_pixel_pipeline_timing.d2` | `entity_drawer` 2-cycle pipeline: cycle 1 issues ROM addresses, cycle 2 merges via combinational `always_comb` mux. The 1-cycle latency lives in the stage-1 hit-signal flops + the sprite ROM read; the final `color_out` is combinational. |
+| 28 | `05-cross-cutting/04_build_pipeline.d2` | Two lanes joining at the SD card / on-board install: (a) **HW** on workstation: `make qsys` → `quartus` → `.sof` → `.rbf`; `make dtb` → `.dtb`. (b) **SW** (on-board native, or cross-compile via `CC=arm-linux-gnueabihf-gcc` + `ARCH`/`CROSS_COMPILE`/`KERNEL_SOURCE`): `make module` → `pvz_driver.ko`; `make pvz` → game binary. |
+| 29 | `05-cross-cutting/05_boot_flow.d2` | Cold boot only: power on → preloader → U-Boot → `fatload mmc 0:1 soc_system.rbf` → `fpga load 0` → `run bridge_enable_handoff` → Linux + DTB → root FS → manual `insmod pvz_driver.ko` → `./pvz`. `shape: sequence_diagram`. |
+
+*Dropped from this section: `06_test_architecture.d2`. The test surfaces it would document (ModelSim TBs, on-board `test_shapes` / `test_input`, host `test_game`) do not exist on this branch — `hw/tb/`, `sw/test/`, `.github/`, and `deploy.sh` are absent. `doc/guide/README.md:61` explicitly says so.*
 
 ### Section 6 — Cross-layer flow (6)
 
 | # | File | What it shows |
 |---|------|---------------|
-| 31 | `06-flow/01_one_frame.d2` | End-to-end: keyboard event → main loop → `input_get_action` → `game_tick` → `render_frame` → ioctl×N → register file → next VGA scanout → entity drawer → palette → monitor pixel. |
-| 32 | `06-flow/02_place_plant.d2` | TAB → SELECTED toggles → SPACE → cost check (`sun ≥ 50`) → grid update (PLANTS/SUNFLOWERS bit) → `sun -= 50` → HUD redraw next frame. |
-| 33 | `06-flow/03_pea_zombie_collision.d2` | Pea advance → bbox vs zombie bbox → `zombie.hp--` → if 0 clear `alive` bit → pea cleared. |
-| 34 | `06-flow/04_zombie_eats_plant.d2` | Zombie enters plant cell → stops, enters eating mode → eat timer → plant HP→0 → bit cleared → zombie resumes. |
-| 35 | `06-flow/05_sun_economy.d2` | Frame counter → every 480 frames → `sun += 25` → SUN register write → HUD draws another tile next frame. |
-| 36 | `06-flow/06_insmod_probe.d2` | `insmod pvz_driver.ko` → init → `platform_driver_register` → kernel walks DT → finds `csee4840,pvz_gpu-1.0` → `probe` → `of_iomap` → `misc_register` → `/dev/pvz` appears. `shape: sequence_diagram`. |
+| 30 | `06-flow/01_one_frame.d2` | End-to-end: keyboard event → main loop → `process_input(&gs)` → `game_update(&gs)` → `render_frame(&gs)` → ioctl×N → register file → next VGA scanout → entity drawer → palette → monitor pixel. |
+| 31 | `06-flow/02_place_plant.d2` | TAB → SELECTED toggles → SPACE → cost check (`sun ≥ 50`) → grid update (PLANTS/SUNFLOWERS bit) → `sun -= 50` → HUD redraw next frame. |
+| 32 | `06-flow/03_pea_zombie_collision.d2` | Pea advance → bbox vs zombie bbox → `zombie.hp--` → if 0 clear `alive` bit → pea cleared. |
+| 33 | `06-flow/04_zombie_eats_plant.d2` | Zombie enters plant cell → stops, enters eating mode → eat timer → plant HP→0 → bit cleared → zombie resumes. |
+| 34 | `06-flow/05_sun_economy.d2` | Frame counter → every 480 frames → `sun += 25` → SUN register write → HUD draws another tile next frame. |
+| 35 | `06-flow/06_insmod_probe.d2` | `insmod pvz_driver.ko` → `pvz_init` → `platform_driver_probe(&pvz_driver, pvz_probe)` → kernel walks DT → finds `csee4840,pvz_gpu-1.0` → `pvz_probe`: `misc_register` then `of_address_to_resource` → `request_mem_region` → `of_iomap` → `/dev/pvz` ready. `shape: sequence_diagram`. |
 
 ## 5. Rendering and Makefile
 
@@ -187,7 +188,7 @@ Prerequisites: `d2` binary in `PATH`. Document this in
 
 The catalog is complete when:
 
-1. All 36 `.d2` source files exist under
+1. All 35 `.d2` source files exist under
    `v5-cursor-controller/doc/diagrams/` in the section folders above,
    each opening with the required header comment.
 2. `common.d2` defines the shared classes listed in §3 and is imported
@@ -224,9 +225,41 @@ The catalog is complete when:
   absent in the actual `hw/` directory. Diagrams will track the
   actual code, not the stale README. (Fixing the README is out of
   scope here.)
-- **Sub-folder count:** 36 diagrams is intentional ("comprehensive").
+- **Sub-folder count:** 35 diagrams is intentional ("comprehensive").
   If a subset is judged too verbose during implementation, the
   recommended cuts are: 27 (`pixel_pipeline_timing` — content overlaps
   with diagram 11) and 17 (`game_loop_fsm` — collapses to a small
   state machine that the prof may consider trivial). Both kept by
   default for completeness.
+
+## 9. Revision history
+
+- **2026-05-12 (initial).** Initial 36-diagram catalog.
+- **2026-05-12 (post-Codex review).** Independent review against the
+  source identified the following corrections; spec and plan both
+  updated:
+  - **Test/deploy/CI scope.** `06_test_architecture.d2` dropped
+    entirely (no `hw/tb/`, no `sw/test/`); CI lane removed from
+    `04_build_pipeline.d2` (no `.github/`); `deploy.sh` lane removed
+    from boot diagram, which is renamed `05_boot_flow.d2`. Total
+    drops from 36 → 35. Authority: `doc/guide/README.md:61` ("not
+    yet built on this branch") and direct filesystem check.
+  - **Entity drawer wording.** `color_out` is combinational
+    (`always_comb` at `hw/entity_drawer.sv:330`), not a separately
+    registered output. Earlier description of "register the final
+    color" was misleading.
+  - **Insmod / probe order.** Driver uses `platform_driver_probe`
+    (not `..._register`) in `pvz_init` (`sw/pvz_driver.c:130`), and
+    inside `pvz_probe` (`:61`) the call order is `misc_register` →
+    `of_address_to_resource` → `request_mem_region` → `of_iomap`.
+    Earlier flow listed it backwards.
+  - **Frame walkthrough.** No function called `game_tick(action)`
+    exists. Main loop is `process_input(&gs)` (`sw/main.c:114`),
+    `game_update(&gs)` (`:119`), `render_frame(&gs)` (`:122`), with
+    `game_update` running phases in this order: sun, spawning,
+    firing, projectiles, zombies, collisions, win
+    (`sw/game.c:295-301`).
+  - **Register-map gotcha.** Decoder uses `else if (address < 6'd40)`
+    (`hw/pvz_top.sv:122`), so words 2..31 alias into the zombie
+    slot. Called out in both the register-map cheat sheet and the
+    `pvz_top` regfile signal-level diagram.

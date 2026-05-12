@@ -2,15 +2,26 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Spec:** `v5-cursor-controller/docs/superpowers/specs/2026-05-12-system-diagrams-design.md`
+**Spec:** `docs/superpowers/specs/2026-05-12-system-diagrams-design.md`
 
-**Goal:** Produce 36 D2 diagrams (`.d2` + `.svg` + `.png` each) plus shared scaffolding (`common.d2`, `Makefile`, `README.md`) documenting `v5-cursor-controller/` end-to-end for a multi-hour final design review.
+**Goal:** Produce 35 D2 diagrams (`.d2` + `.svg` + `.png` each) plus shared scaffolding (`common.d2`, `Makefile`, `README.md`) documenting `v5-cursor-controller/` end-to-end for a multi-hour final design review.
 
-**Architecture:** All files live in `v5-cursor-controller/doc/diagrams/`, sub-foldered by section. Every diagram imports a shared `common.d2` for consistent classes. A top-level `Makefile` renders every `.d2` to both SVG and PNG via the `d2` CLI. Work is phased so the four "hero" diagrams (system context, FPGA pipeline, register map, one-frame flow) land first and can be reviewed before the long tail.
+**Architecture:** All files live in `doc/diagrams/`, sub-foldered by section. Every diagram imports a shared `common.d2` for consistent classes. A top-level `Makefile` renders every `.d2` to both SVG and PNG via the `d2` CLI. Work is phased so the four "hero" diagrams (system context, FPGA pipeline, register map, one-frame flow) land first and can be reviewed before the long tail.
 
 **Tech Stack:** D2 v0.7.1 (already installed at `/home/linuxbrew/.linuxbrew/bin/d2`), GNU make, git. No language runtime; pure text + invoked binary.
 
 ---
+
+## Working directory convention
+
+Every shell snippet in this plan assumes **the working directory is the `v5-cursor-controller` worktree root** (`.../pvz-fpga/v5-cursor-controller`). The repo uses a bare-repo + per-branch worktree layout, so git commands MUST be run from inside the worktree, not the parent. To make commands portable, an implementer may set up once:
+
+```bash
+REPO=/home/nyavana/columbia/4840/pvz-fpga/v5-cursor-controller
+cd "$REPO"
+```
+
+All `d2` and `git` invocations below use **repo-relative paths** (e.g. `doc/diagrams/01-system/01_context.d2`), never an absolute path or a `v5-cursor-controller/` prefix.
 
 ## Conventions used in every diagram task
 
@@ -25,23 +36,20 @@ placeholders filled in:
 # Detail:      <block | signal>
 ```
 
-Every diagram MUST start with `...: @../common.d2` (or `@../../common.d2`
-from a section subfolder — Phase 0 establishes the exact import path)
-so it picks up the shared class definitions.
+Every diagram MUST start with `...@../common.d2` (NOTE: no colon — `...: @file` is rejected by D2 0.7.1; the correct spread-import syntax is `...@file`) so it picks up the shared class definitions. From a section subfolder (one level below `doc/diagrams/`) the import path is `...@../common.d2`.
 
-Every diagram task ends with the same three-step cadence:
+Every diagram task ends with the same three-step cadence (run from the `v5-cursor-controller` worktree root):
 
 1. **Write the `.d2` file** with the spec'd content.
 2. **Render and verify**:
    ```bash
-   cd v5-cursor-controller/doc/diagrams
-   d2 --layout=elk <relative-path>.d2 <relative-path>.svg
-   d2 --layout=elk <relative-path>.d2 <relative-path>.png
+   d2 --layout=elk doc/diagrams/<section>/<file>.d2 doc/diagrams/<section>/<file>.svg
+   d2 --layout=elk doc/diagrams/<section>/<file>.d2 doc/diagrams/<section>/<file>.png
    ```
    Expected: both commands exit 0, both files appear next to the source. If `--layout=elk` warns "ELK not available" use the default `dagre` layout (still exits 0).
 3. **Commit** the source plus the two rendered outputs:
    ```bash
-   git add doc/diagrams/<relative-path>.d2 doc/diagrams/<relative-path>.svg doc/diagrams/<relative-path>.png
+   git add doc/diagrams/<section>/<file>.d2 doc/diagrams/<section>/<file>.svg doc/diagrams/<section>/<file>.png
    git -c commit.gpgsign=false commit -m "docs(diagrams): add <short-title>"
    ```
 
@@ -54,7 +62,7 @@ Where a diagram task lists a "Structured spec" instead of full D2 source, the im
 ### Task 0.1: Verify d2 toolchain and create folder structure
 
 **Files:**
-- Create: `v5-cursor-controller/doc/diagrams/` (and all section subfolders)
+- Create: `doc/diagrams/` (and all section subfolders)
 
 - [ ] **Step 1: Verify d2 is on PATH**
 
@@ -66,14 +74,13 @@ Expected: `0.7.1` or newer.
 - [ ] **Step 2: Create the folder tree**
 
 ```bash
-cd v5-cursor-controller
 mkdir -p doc/diagrams/{01-system,02-hw,03-sw,04-interface,05-cross-cutting,06-flow}
 ```
 
 - [ ] **Step 3: Verify folders exist**
 
 ```bash
-ls -1 v5-cursor-controller/doc/diagrams/
+ls -1 doc/diagrams/
 ```
 Expected: `01-system  02-hw  03-sw  04-interface  05-cross-cutting  06-flow`.
 
@@ -82,14 +89,14 @@ Expected: `01-system  02-hw  03-sw  04-interface  05-cross-cutting  06-flow`.
 ### Task 0.2: Write `common.d2` (shared styles)
 
 **Files:**
-- Create: `v5-cursor-controller/doc/diagrams/common.d2`
+- Create: `doc/diagrams/common.d2`
 
 - [ ] **Step 1: Write the file**
 
 ```d2
 # common.d2 — shared classes for the PvZ-FPGA diagram catalog.
-# Imported by every other .d2 via `...: @../common.d2` (or
-# `...: @../../common.d2` from a section subfolder).
+# Imported by every other .d2 via `...@../common.d2` from a section
+# subfolder.  (NOTE: D2 0.7.1 rejects `...: @file`; use `...@file`.)
 
 classes: {
   hw_module: {
@@ -199,10 +206,13 @@ classes: {
 - [ ] **Step 2: Sanity-render**
 
 ```bash
-cd v5-cursor-controller/doc/diagrams
 # A "classes only" file has no nodes; create a trivial probe.
-echo '...: @common.d2
-probe.class: hw_module' > /tmp/_probe.d2
+# Import points at our committed common.d2 by absolute path so the
+# probe works regardless of cwd.
+cat > /tmp/_probe.d2 <<EOF
+...@$(pwd)/doc/diagrams/common.d2
+probe.class: hw_module
+EOF
 d2 /tmp/_probe.d2 /tmp/_probe.svg && rm /tmp/_probe.d2 /tmp/_probe.svg
 ```
 Expected: exit 0, no errors. If d2 reports an unknown class it means the import path is wrong — re-check.
@@ -210,14 +220,14 @@ Expected: exit 0, no errors. If d2 reports an unknown class it means the import 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add v5-cursor-controller/doc/diagrams/common.d2
+git add doc/diagrams/common.d2
 git -c commit.gpgsign=false commit -m "docs(diagrams): add shared common.d2 styles"
 ```
 
 ### Task 0.3: Write `Makefile`
 
 **Files:**
-- Create: `v5-cursor-controller/doc/diagrams/Makefile`
+- Create: `doc/diagrams/Makefile`
 
 - [ ] **Step 1: Write the Makefile**
 
@@ -276,29 +286,28 @@ help:
 - [ ] **Step 2: Smoke-test `make check-d2`**
 
 ```bash
-cd v5-cursor-controller/doc/diagrams
-make check-d2
+make -C doc/diagrams check-d2
 ```
 Expected: silent success (exit 0).
 
 - [ ] **Step 3: Smoke-test `make all` (no `.d2` files yet — should noop cleanly)**
 
 ```bash
-make all
+make -C doc/diagrams all
 ```
 Expected: `check-d2` passes, then make reports nothing to do (no `.d2` matches found since only `common.d2` exists — and it's filtered out). Exit 0.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add v5-cursor-controller/doc/diagrams/Makefile
+git add doc/diagrams/Makefile
 git -c commit.gpgsign=false commit -m "docs(diagrams): add Makefile to render all .d2 to SVG+PNG"
 ```
 
 ### Task 0.4: Write `README.md` (catalog index stub)
 
 **Files:**
-- Create: `v5-cursor-controller/doc/diagrams/README.md`
+- Create: `doc/diagrams/README.md`
 
 - [ ] **Step 1: Write the README**
 
@@ -356,7 +365,7 @@ Each row links to the `.d2` source (the `.svg` and `.png` sit next to it).
 | 15 | [02_kernel_driver.d2](03-sw/02_kernel_driver.d2) | Driver init + ioctl path. |
 | 16 | [03_game_state_er.d2](03-sw/03_game_state_er.d2) | `game_state_t` data shape. |
 | 17 | [04_game_loop_fsm.d2](03-sw/04_game_loop_fsm.d2) | INIT → PLAYING → WIN/LOSE. |
-| 18 | [05_game_update_flow.d2](03-sw/05_game_update_flow.d2) | Order of phases inside `game_tick()`. |
+| 18 | [05_game_update_flow.d2](03-sw/05_game_update_flow.d2) | Order of phases inside `game_update()` (sw/game.c:288). |
 | 19 | [06_input_pipeline.d2](03-sw/06_input_pipeline.d2) | `/dev/input/eventN` → action. |
 | 20 | [07_render_mapping.d2](03-sw/07_render_mapping.d2) | Game-state field → FPGA register word. |
 
@@ -369,33 +378,32 @@ Each row links to the `.d2` source (the `.svg` and `.png` sit next to it).
 | 23 | [03_register_map_cheatsheet.d2](04-interface/03_register_map_cheatsheet.d2) | All 51 words, bit layouts, writers/consumers. |
 | 24 | [04_device_tree_binding.d2](04-interface/04_device_tree_binding.d2) | `_hw.tcl` → sopc2dts → dtb → driver `of_match`. |
 
-### 05-cross-cutting — Timing / build / deploy / test (6)
+### 05-cross-cutting — Timing / build / boot (5)
 
 | # | File | What it shows |
 |---|------|---------------|
 | 25 | [01_frame_timing.d2](05-cross-cutting/01_frame_timing.d2) | 60 Hz tick budget; tearing window. |
 | 26 | [02_vga_timing.d2](05-cross-cutting/02_vga_timing.d2) | 640×480@60 Hz waveforms. |
 | 27 | [03_pixel_pipeline_timing.d2](05-cross-cutting/03_pixel_pipeline_timing.d2) | Entity drawer 2-cycle pipeline. |
-| 28 | [04_build_pipeline.d2](05-cross-cutting/04_build_pipeline.d2) | HW + SW + CI pipelines joining at SD card. |
-| 29 | [05_boot_deploy.d2](05-cross-cutting/05_boot_deploy.d2) | Cold boot + `deploy.sh` flows. |
-| 30 | [06_test_architecture.d2](05-cross-cutting/06_test_architecture.d2) | ModelSim TBs, on-board tests, host `test_game`. |
+| 28 | [04_build_pipeline.d2](05-cross-cutting/04_build_pipeline.d2) | HW (Quartus) + SW (Make) pipelines joining at SD card. |
+| 29 | [05_boot_flow.d2](05-cross-cutting/05_boot_flow.d2) | Cold boot: preloader → U-Boot → `fpga load` → Linux → `insmod`. |
 
 ### 06-flow — Cross-layer flows (6)
 
 | # | File | What it shows |
 |---|------|---------------|
-| 31 | [01_one_frame.d2](06-flow/01_one_frame.d2) | End-to-end frame: key → game → registers → pixel. |
-| 32 | [02_place_plant.d2](06-flow/02_place_plant.d2) | TAB → SPACE → grid bit set → HUD update. |
-| 33 | [03_pea_zombie_collision.d2](06-flow/03_pea_zombie_collision.d2) | Pea hits zombie → HP-- → dead. |
-| 34 | [04_zombie_eats_plant.d2](06-flow/04_zombie_eats_plant.d2) | Zombie enters cell → eat → plant removed. |
-| 35 | [05_sun_economy.d2](06-flow/05_sun_economy.d2) | 480-frame tick → sun += 25. |
-| 36 | [06_insmod_probe.d2](06-flow/06_insmod_probe.d2) | `insmod` → DT walk → `probe` → `/dev/pvz`. |
+| 30 | [01_one_frame.d2](06-flow/01_one_frame.d2) | End-to-end frame: key → game → registers → pixel. |
+| 31 | [02_place_plant.d2](06-flow/02_place_plant.d2) | TAB → SPACE → grid bit set → HUD update. |
+| 32 | [03_pea_zombie_collision.d2](06-flow/03_pea_zombie_collision.d2) | Pea hits zombie → HP-- → dead. |
+| 33 | [04_zombie_eats_plant.d2](06-flow/04_zombie_eats_plant.d2) | Zombie enters cell → eat → plant removed. |
+| 34 | [05_sun_economy.d2](06-flow/05_sun_economy.d2) | 480-frame tick → sun += 25. |
+| 35 | [06_insmod_probe.d2](06-flow/06_insmod_probe.d2) | `insmod` → DT walk → `probe` → `/dev/pvz`. |
 ```
 
 - [ ] **Step 2: Commit**
 
 ```bash
-git add v5-cursor-controller/doc/diagrams/README.md
+git add doc/diagrams/README.md
 git -c commit.gpgsign=false commit -m "docs(diagrams): add catalog README index"
 ```
 
@@ -409,19 +417,19 @@ four diagrams before continuing.
 ### Task 1.1: `01-system/01_context.d2` — system context
 
 **Files:**
-- Create: `v5-cursor-controller/doc/diagrams/01-system/01_context.d2`
-- Read for grounding: `v5-cursor-controller/README.md` (deploy section), `v5-cursor-controller/sw/main.c` (controls)
+- Create: `doc/diagrams/01-system/01_context.d2`
+- Read for grounding: `sw/main.c` (controls printed at startup, lines 103-105), `doc/guide/01-introduction.md`
 
 - [ ] **Step 1: Write the file**
 
 ```d2
 # Title:       System context
 # Section:     01-system
-# Documents:   README.md (deploy section), sw/main.c (controls)
+# Documents:   sw/main.c (controls), doc/guide/01-introduction.md
 # Defends:     "What's connected to the board and what does the user touch?"
 # Detail:      block
 
-...: @../common.d2
+...@../common.d2
 
 direction: down
 
@@ -455,29 +463,28 @@ board.fpga -> monitor: "VGA R/G/B,\nHS/VS, CLK"
 dev_host -> board.hps: "screen /dev/ttyUSB0 115200\n(debug only)"
 ```
 
-- [ ] **Step 2: Render and verify** (per the standard cadence).
+- [ ] **Step 2: Render and verify** (per the standard cadence, run from worktree root).
 
 ```bash
-cd v5-cursor-controller/doc/diagrams
-d2 --layout=elk 01-system/01_context.d2 01-system/01_context.svg
-d2 --layout=elk 01-system/01_context.d2 01-system/01_context.png
+d2 --layout=elk doc/diagrams/01-system/01_context.d2 doc/diagrams/01-system/01_context.svg
+d2 --layout=elk doc/diagrams/01-system/01_context.d2 doc/diagrams/01-system/01_context.png
 ```
 Expected: both files written, exit 0.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add v5-cursor-controller/doc/diagrams/01-system/01_context.d2 \
-        v5-cursor-controller/doc/diagrams/01-system/01_context.svg \
-        v5-cursor-controller/doc/diagrams/01-system/01_context.png
-git -c commit.gpgsign=false commit -m "docs(diagrams): add system context (1/36)"
+git add doc/diagrams/01-system/01_context.d2 \
+        doc/diagrams/01-system/01_context.svg \
+        doc/diagrams/01-system/01_context.png
+git -c commit.gpgsign=false commit -m "docs(diagrams): add system context (1/35)"
 ```
 
 ### Task 1.2: `02-hw/02_pvz_top_block.d2` — FPGA pipeline
 
 **Files:**
-- Create: `v5-cursor-controller/doc/diagrams/02-hw/02_pvz_top_block.d2`
-- Read for grounding: `v5-cursor-controller/hw/pvz_top.sv:30-255`
+- Create: `doc/diagrams/02-hw/02_pvz_top_block.d2`
+- Read for grounding: `hw/pvz_top.sv:30-255`
 
 - [ ] **Step 1: Write the file**
 
@@ -488,7 +495,7 @@ git -c commit.gpgsign=false commit -m "docs(diagrams): add system context (1/36)
 # Defends:     "Walk us through the FPGA side at a high level."
 # Detail:      block
 
-...: @../common.d2
+...@../common.d2
 
 direction: right
 
@@ -561,15 +568,15 @@ vga_pins: {
 pvz_top.blank_mux -> vga_pins
 ```
 
-- [ ] **Step 2: Render and verify** — as the standard cadence.
+- [ ] **Step 2: Render and verify** — as the standard cadence (from worktree root, `doc/diagrams/02-hw/02_pvz_top_block.d2` → `.svg` and `.png`).
 
-- [ ] **Step 3: Commit** — message: `docs(diagrams): add pvz_top block (2/36)`.
+- [ ] **Step 3: Commit** — message: `docs(diagrams): add pvz_top block (2/35)`.
 
 ### Task 1.3: `04-interface/03_register_map_cheatsheet.d2` — register map
 
 **Files:**
-- Create: `v5-cursor-controller/doc/diagrams/04-interface/03_register_map_cheatsheet.d2`
-- Read for grounding: `v5-cursor-controller/hw/pvz_top.sv:8-28, 94-148`, `v5-cursor-controller/sw/pvz.h:41-49`
+- Create: `doc/diagrams/04-interface/03_register_map_cheatsheet.d2`
+- Read for grounding: `hw/pvz_top.sv:8-28, 94-148`, `sw/pvz.h:41-49`, `doc/guide/06-register-map.md:143-160` (alias gap).
 
 - [ ] **Step 1: Write the file**
 
@@ -580,7 +587,7 @@ pvz_top.blank_mux -> vga_pins
 # Defends:     "Show me exactly where the cursor position lives in HW."
 # Detail:      signal
 
-...: @../common.d2
+...@../common.d2
 
 grid-rows: 1
 direction: right
@@ -591,6 +598,7 @@ regs: {
 
   w00: { label: "0  PLANTS\nbits[31:0] = peashooter at cell i (i = row*8+col)"; class: register }
   w01: { label: "1  SUNFLOWER\nbits[31:0] = sunflower at cell i"; class: register }
+  w_alias: { label: "2..31  (alias trap)\nDecoder chain in pvz_top.sv:122 is\n  else if (address < 6'd40)\nso words 2..31 also write the zombie slot at\n  zombie[address[2:0]].\nSoftware contract reserves these — never write them."; class: note }
   w32: { label: "32..39  ZOMBIE[0..7]\nbit 31 = alive\nbits [11:10] = row (0..3)\nbits [9:0]   = x_pixel (0..639)"; class: register }
   w40: { label: "40..47  PEA[0..7]\nsame encoding as ZOMBIE"; class: register }
   w48: { label: "48  CURSOR\nbit 31 = visible\nbits [4:2] = col (0..7)\nbits [1:0] = row (0..3)"; class: register }
@@ -643,64 +651,65 @@ note2.label: "No vsync latching: writes take effect on the next clk edge,\nso a 
 
 - [ ] **Step 2: Render and verify** — standard cadence.
 
-- [ ] **Step 3: Commit** — message: `docs(diagrams): add register-map cheat sheet (3/36)`.
+- [ ] **Step 3: Commit** — message: `docs(diagrams): add register-map cheat sheet (3/35)`.
 
 ### Task 1.4: `06-flow/01_one_frame.d2` — one-frame end-to-end
 
 **Files:**
-- Create: `v5-cursor-controller/doc/diagrams/06-flow/01_one_frame.d2`
-- Read for grounding: `v5-cursor-controller/sw/main.c`, `v5-cursor-controller/sw/render.c`, `v5-cursor-controller/hw/entity_drawer.sv:280-360`
+- Create: `doc/diagrams/06-flow/01_one_frame.d2`
+- Read for grounding: `sw/main.c:107-150` (main loop body), `sw/main.c:34-68` (`process_input`), `sw/game.c:288-302` (`game_update` and its phase order), `sw/render.c`, `hw/entity_drawer.sv:280-360`
 
 - [ ] **Step 1: Write the file**
 
 ```d2
 # Title:       One frame end-to-end
 # Section:     06-flow
-# Documents:   sw/main.c, sw/game.c, sw/render.c, hw/entity_drawer.sv
+# Documents:   sw/main.c (process_input, main loop), sw/game.c (game_update), sw/render.c, hw/entity_drawer.sv
 # Defends:     "Walk me through what happens during one 16.67 ms frame."
 # Detail:      block
 
-...: @../common.d2
+...@../common.d2
 
 shape: sequence_diagram
 
 keyboard: { label: "USB keyboard\n(/dev/input/eventN)"; class: external }
-main:     { label: "main.c\n60 Hz loop"; class: sw_module }
-input_c:  { label: "input.c\ninput_poll()"; class: sw_module }
-game_c:   { label: "game.c\ngame_tick()"; class: sw_module }
-render_c: { label: "render.c\nrender_frame()"; class: sw_module }
+main:     { label: "main.c\nwhile (gs.state >= 0)"; class: sw_module }
+input_c:  { label: "input.c\ninput_poll() -> INPUT_*"; class: sw_module }
+process:  { label: "main.c process_input(&gs)\n(cursor move, place/remove, TAB, ESC)"; class: sw_module }
+game_c:   { label: "game.c game_update(&gs)\nsun, spawn, fire, projectiles,\nzombies, collisions, win"; class: sw_module }
+render_c: { label: "render.c render_frame(&gs)"; class: sw_module }
 driver:   { label: "pvz_driver.ko\nioctl PVZ_WRITE_REG"; class: kernel_module }
 regfile:  { label: "pvz_top regfile"; class: register }
 drawer:   { label: "entity_drawer + ROMs"; class: hw_module }
 pal:      { label: "color_palette"; class: hw_module }
 vga:      { label: "VGA pins -> monitor"; class: external }
 
-main -> input_c:  "1. poll for action"
+main -> process: "1. process_input(&gs)"
+process -> input_c: "input_poll()"
 keyboard -> input_c: "input_event{EV_KEY, code, value}"
-input_c -> main:  "action_t (UP/SPACE/TAB/...)"
-main -> game_c:   "2. game_tick(action)"
-game_c -> game_c: "advance zombies,\nadvance peas,\ncollision, eat,\nspawn, sun acc.,\nwin/lose"
-main -> render_c: "3. render_frame()"
-render_c -> driver: "ioctl PVZ_WRITE_REG\n(up to 51 words)"
-driver -> regfile: "iowrite32(base + word*4)"
-main -> main: "4. sleep until next 16.67 ms tick"
+input_c -> process: "INPUT_UP/DOWN/.../TAB/SPACE/D/ESC"
+main -> game_c: "2. game_update(&gs)"
+game_c -> game_c: "update_sun -> update_spawning ->\nupdate_firing -> update_projectiles ->\nupdate_zombies -> check_collisions ->\ncheck_win"
+main -> render_c: "3. render_frame(&gs)"
+render_c -> driver: "ioctl PVZ_WRITE_REG\n(one per dirty word, up to 51)"
+driver -> regfile: "iowrite32(virtbase + word*4)"
+main -> main: "4. usleep(FRAME_USEC - elapsed)"
 
 regfile -> drawer: "every clock,\nfor every (px,py)"
-drawer -> pal:    "pixel_color[7:0]"
+drawer -> pal:    "color_out[7:0]"
 pal -> vga:       "R,G,B [7:0]"
 ```
 
 - [ ] **Step 2: Render and verify** — standard cadence.
 
-- [ ] **Step 3: Commit** — message: `docs(diagrams): add one-frame end-to-end flow (4/36)`.
+- [ ] **Step 3: Commit** — message: `docs(diagrams): add one-frame end-to-end flow (4/35)`.
 
 ### Task 1.5: REVIEW GATE — render Phase 1 and pause
 
 - [ ] **Step 1: Render every diagram so far**
 
 ```bash
-cd v5-cursor-controller/doc/diagrams
-make all
+make -C doc/diagrams all
 ```
 Expected: clean exit, four `.svg` and four `.png` files added.
 
@@ -727,7 +736,7 @@ Each task below provides:
 
 ### Task 2.1: `01-system/02_hw_sw_boundary.d2`
 
-**Read:** `v5-cursor-controller/hw/pvz_top.sv:30-45`, `v5-cursor-controller/sw/pvz_driver.c`, `v5-cursor-controller/sw/main.c`.
+**Read:** `hw/pvz_top.sv:30-45`, `sw/pvz_driver.c`, `sw/main.c`.
 
 **Header:**
 ```
@@ -764,7 +773,7 @@ Each task below provides:
 
 ### Task 2.2: `01-system/03_soc_block.d2`
 
-**Read:** `v5-cursor-controller/doc/manual/DE1-SoC_User_manual.md` for board pinouts; `v5-cursor-controller/hw/soc_system_top.sv` for the actual instantiated peripherals.
+**Read:** `doc/manual/DE1-SoC_User_manual.md` for board pinouts; `hw/soc_system_top.sv` for the actual instantiated peripherals.
 
 **Header:**
 ```
@@ -806,7 +815,7 @@ Each task below provides:
 
 ### Task 2.3: `01-system/04_memory_map.d2`
 
-**Read:** `v5-cursor-controller/hw/pvz_top_hw.tcl` (address span), `v5-cursor-controller/sw/pvz.h` (register indices).
+**Read:** `hw/pvz_top_hw.tcl` (address span), `sw/pvz.h` (register indices).
 
 **Header:**
 ```
@@ -835,7 +844,7 @@ Each task below provides:
 
 ### Task 3.1: `02-hw/01_fpga_top.d2`
 
-**Read:** `v5-cursor-controller/hw/soc_system_top.sv`, `v5-cursor-controller/hw/soc_system.qsys` (top-level).
+**Read:** `hw/soc_system_top.sv`, `hw/soc_system.qsys` (top-level).
 
 **Header:**
 ```
@@ -866,7 +875,7 @@ Each task below provides:
 
 ### Task 3.2: `02-hw/03_vga_counters.d2`
 
-**Read:** `v5-cursor-controller/hw/vga_counters.sv` (entire file).
+**Read:** `hw/vga_counters.sv` (entire file).
 
 **Header:**
 ```
@@ -887,7 +896,7 @@ Each task below provides:
 
 ### Task 3.3: `02-hw/04_bg_grid.d2`
 
-**Read:** `v5-cursor-controller/hw/bg_grid.sv` (entire file).
+**Read:** `hw/bg_grid.sv` (entire file). Constants: `GRID_X=64, GRID_Y=112, GRID_W=512, GRID_H=256`. Palette indices: `COL_DARK_GREEN=1, COL_LIGHT_GREEN=2, COL_BLUE=13`. The parity check uses `gx[6] ^ gy[6]`, not `(cell_col+cell_row)&1`.
 
 **Header:**
 ```
@@ -903,17 +912,17 @@ Each task below provides:
 **Nodes:**
 - `inputs` (class `signal`, label "px[9:0]\npy[9:0]")
 - `in_grid_check` (class `hw_module`, label "in_grid =\npx in [64..575] AND\npy in [112..367]")
-- `cell_idx` (class `hw_module`, label "cell_col = (px-64)[8:6] (0..7)\ncell_row = (py-112)[7:6] (0..3)")
-- `parity` (class `hw_module`, label "(cell_col + cell_row) & 1\n-> choose dark/light green")
-- `out_color` (class `signal`, label "color_out[7:0]\n=GREEN_DARK or GREEN_LIGHT\n=BLACK outside grid")
+- `offset` (class `hw_module`, label "gx = px - 64\ngy = py - 112")
+- `parity` (class `hw_module`, label "light_cell = gx[6] ^ gy[6]\n(checker: alternates every 64 px)")
+- `out_color` (class `signal`, label "color_out[7:0]\n  in_grid && light_cell  -> COL_LIGHT_GREEN (2)\n  in_grid && !light_cell -> COL_DARK_GREEN  (1)\n  !in_grid               -> COL_BLUE        (13)")
 
-**Edges:** flow left to right; tie `inputs` to all three logic blocks, then merge into `out_color`.
+**Edges:** flow left to right; tie `inputs` to `in_grid_check` and `offset`; `offset -> parity`; `in_grid_check + parity -> out_color`.
 
-**Notes:** "Constants must match `entity_drawer.sv`: GRID_X=64, GRID_Y=112, CELL=64, GRID_COLS=8, GRID_ROWS=4."
+**Notes:** "Constants must match `entity_drawer.sv`: GRID_X=64, GRID_Y=112, CELL=64, GRID_COLS=8, GRID_ROWS=4. Outside the lawn the background is sky BLUE (palette idx 13), NOT black."
 
 ### Task 3.4: `02-hw/05_sprite_rom.d2`
 
-**Read:** `v5-cursor-controller/hw/sprite_rom.sv`, `v5-cursor-controller/hw/peashooter_idx.mem` (look at format, do not transcribe), `v5-cursor-controller/hw/pvz_top.sv:177-199`.
+**Read:** `hw/sprite_rom.sv`, `hw/peashooter_idx.mem` (look at format, do not transcribe), `hw/pvz_top.sv:177-199`.
 
 **Header:**
 ```
@@ -938,11 +947,11 @@ Each task below provides:
 
 ### Task 3.5: `02-hw/06_entity_drawer_pipeline.d2`
 
-**Read:** `v5-cursor-controller/hw/entity_drawer.sv:1-26` (layering comment), `:140-280` (stage 1), `:282-358` (stage 2).
+**Read:** `hw/entity_drawer.sv:1-26` (layering comment, names the 7 logical layers), `:140-280` (stage 1 hit detection), `:282-325` (stage-1 hit signals registered via `always_ff`), `:327-358` (stage-2 final mux is `always_comb`, NOT registered).
 
 **Header:**
 ```
-# Title:       entity_drawer pipeline (7 layers, 2 stages)
+# Title:       entity_drawer pipeline (7 logical layers, 2 stages)
 # Section:     02-hw
 # Documents:   hw/entity_drawer.sv
 # Defends:     "How does the entity_drawer combine layers? Where is the 1-cycle latency?"
@@ -953,25 +962,27 @@ Each task below provides:
 
 **Containers:**
 - `stage1` (label "Stage 1 — combinational hit detection (cycle N)", class `layer`)
-  - `bg_hit` (class `hw_module`, label "bg lookup\n(from bg_grid)")
-  - `plant_hit` (label "plant_here = in_grid && plant_present[plant_idx]\nplant_rd_addr issued")
+  - `bg_hit` (class `hw_module`, label "bg lookup\n(bg_grid -> bg_color)")
+  - `plant_hit` (label "plant_here = in_grid && plant_present[plant_idx]\nplant_rd_addr issued (shared with sunflower ROM)")
   - `sun_hit` (label "sunflower_here = in_grid && sunflower_present[plant_idx]")
-  - `pea_hit` (label "pea bbox check\n(for each of 8 peas)")
+  - `pea_hit` (label "pea bbox check\n(loop over 8 pea slots)")
   - `zombie_hit` (label "zombie bbox priority encoder\nzombie_rd_addr issued")
   - `cursor_hit` (label "cursor border check\n4 px border, CURSOR_BORDER")
-  - `sun_hud_hit` (label "sun HUD blocks (10)")
-  - `selector_hit` (label "selector fill + border\n(2 boxes)")
-- `pipeline_regs` (label "Stage boundary registers (clk)\nplant_here_d, sunflower_here_d,\nzombie_hit_d, pea_hit_d,\ncursor_hit_d, sun_hit_d,\nsel0_hit_d, sel0_border_d,\nsel1_hit_d, sel1_border_d,\nselected_plant_d,\nbg_color_d", class `register`)
-- `stage2` (label "Stage 2 — final mux (cycle N+1)\nbg -> plant -> sunflower -> pea -> zombie -> cursor -> sun_hud -> selector_fill -> selector_border", class `layer`)
-  - `out` (class `signal`, label "color_out[7:0]\n(registered)")
+  - `sun_hud_hit` (label "sun HUD blocks (up to 10)\nblock i lit when sun >= (i+1)*50")
+  - `selector_hit` (label "selector fill + border\n(2 boxes, SEL_SZ=48)")
+- `pipeline_regs` (label "Stage boundary flip-flops (always_ff @posedge clk)\n12 fields: bg_color_d[7:0], plant_here_d,\nsunflower_here_d, zombie_hit_d, pea_hit_d,\ncursor_hit_d, sun_hit_d,\nsel0_hit_d, sel0_border_d,\nsel1_hit_d, sel1_border_d,\nselected_plant_d[1:0]", class `register`)
+- `stage2` (label "Stage 2 — final mux (cycle N+1, always_comb, NOT registered)\nLayer order in the mux (later overrides earlier):\nbg -> plant -> sunflower -> pea -> zombie ->\ncursor -> sun_hud -> sel0_fill -> sel1_fill ->\nsel0_border (if selected==0) -> sel1_border (if selected==1)", class `layer`)
+  - `out` (class `signal`, label "color_out[7:0]\n(combinational mux output -> color_palette)")
 
-**Edges:** every Stage 1 node -> matching `pipeline_regs` field -> Stage 2 mux; Stage 2 -> `out`. ROM data arrives at Stage 2 in cycle N+1 because address was issued in N.
+**Edges:** every Stage 1 hit signal -> matching `pipeline_regs` flop -> Stage 2 mux; ROM pixels (`plant_rd_pixel`, `sunflower_rd_pixel`, `zombie_rd_pixel`) feed Stage 2 directly in cycle N+1 because their addresses were issued in cycle N. Stage 2 mux -> `out`.
 
-**Notes:** "Plant and sunflower share `plant_rd_addr` because they share the cell coordinates; the two ROMs read in parallel."
+**Notes:**
+- "The mux itself is `always_comb` (entity_drawer.sv:330). The 1-cycle latency between `px,py` and `color_out` comes from registering the stage-1 hits AND from the sprite ROM's 1-cycle read latency — those two delays align so the mux can use both on cycle N+1."
+- "Plant and sunflower share `plant_rd_addr` because they share the cell coordinates; the two ROMs read in parallel."
 
 ### Task 3.6: `02-hw/07_entity_drawer_signals.d2` ⚙ (signal-level hot spot)
 
-**Read:** `v5-cursor-controller/hw/entity_drawer.sv` (full file, especially lines 33-79 ports and 122-194 unpack + zombie hit).
+**Read:** `hw/entity_drawer.sv` (full file). Especially: lines 33-79 ports (bit-widths), 122-194 unpack + zombie hit priority encoder, 282-325 pipeline registers (`always_ff`), 327-358 final mux (`always_comb`, combinational — do NOT claim the output is registered).
 
 **Header:**
 ```
@@ -1002,16 +1013,18 @@ Each task below provides:
   - `zombie_rd_addr[11:0]` (output)
   - `zombie_rd_pixel[7:0]` (input)
 - `pipeline_regs` (class `register`, label "12 flip-flops, all clk/reset:\nbg_color_d[7:0], plant_here_d,\nsunflower_here_d, zombie_hit_d,\npea_hit_d, cursor_hit_d, sun_hit_d,\nsel0_hit_d, sel0_border_d,\nsel1_hit_d, sel1_border_d,\nselected_plant_d[1:0]")
-- `final_mux` (class `hw_module`, label "Layered mux (always_comb)\ncolor_out[7:0]")
-- `color_out_node` (class `signal`, label "color_out[7:0] -> color_palette")
+- `final_mux` (class `hw_module`, label "Layered mux (always_comb, combinational)\ncolor_out[7:0]\nbg_color_d -> plant -> sunflower ->\npea -> zombie -> cursor -> sun_hud ->\nsel0_fill -> sel1_fill ->\nsel0_border (if selected==0) ->\nsel1_border (if selected==1)")
+- `color_out_node` (class `signal`, label "color_out[7:0] -> color_palette\n(combinational, NOT a separate flip-flop)")
 
 **Edges:** match the source-of-truth: packed buses -> `unpack`; `unpack` + coordinates -> `stage1_addr`; `stage1_addr` -> `plant_rd_addr`, `zombie_rd_addr`; ROM pixel inputs -> `final_mux`; all stage-1 hit signals -> `pipeline_regs`; `pipeline_regs` + current-cycle ROM pixels -> `final_mux` -> `color_out_node`.
 
-**Notes:** "Color indices used in the mux: GREEN=7, BRIGHT_GREEN=9, YELLOW=4, ORANGE=12, TRANSPARENT=0xFF (must match color_palette.sv)."
+**Notes:**
+- "Color indices used in the mux: GREEN=7, BRIGHT_GREEN=9, YELLOW=4, ORANGE=12, TRANSPARENT=0xFF (must match color_palette.sv)."
+- "Only the stage-1 hit signals are registered (in `pipeline_regs`). The final mux at `entity_drawer.sv:330` is `always_comb` — `color_out` is combinational, NOT a separate flip-flop."
 
 ### Task 3.7: `02-hw/08_color_palette.d2`
 
-**Read:** `v5-cursor-controller/hw/color_palette.sv` (entire file).
+**Read:** `hw/color_palette.sv` (entire file).
 
 **Header:**
 ```
@@ -1035,7 +1048,7 @@ Each task below provides:
 
 ### Task 3.8: `02-hw/09_pvz_top_regfile_signals.d2` ⚙ (signal-level hot spot)
 
-**Read:** `v5-cursor-controller/hw/pvz_top.sv:30-148` (ports and Avalon write decode).
+**Read:** `hw/pvz_top.sv:30-148` (ports and Avalon write decode).
 
 **Header:**
 ```
@@ -1050,7 +1063,7 @@ Each task below provides:
 
 **Nodes:**
 - `avalon_in` (class `bus`, label "address[5:0]\nwritedata[31:0]\nwrite\nchipselect")
-- `decoder` (class `hw_module`, label "if (chipselect && write):\n  addr==0  -> plant_present <= writedata\n  addr==1  -> sunflower_present <= writedata\n  addr<40  -> zombie[addr[2:0]].{alive,x,row}\n              <= {writedata[31], [9:0], [11:10]}\n  addr<48  -> pea[addr[2:0]].{alive,x,row}\n              <= same\n  addr==48 -> cursor_visible, cursor_col[4:2], cursor_row[1:0]\n  addr==49 -> sun_value[13:0]\n  addr==50 -> selected_plant[1:0]")
+- `decoder` (class `hw_module`, label "if (chipselect && write):\n  addr==0  -> plant_present <= writedata\n  addr==1  -> sunflower_present <= writedata\n  addr<40  -> zombie[addr[2:0]].{alive,x,row}\n              <= {writedata[31], [9:0], [11:10]}\n              ALIAS: addresses 2..31 also fall into this branch,\n              writing zombie slot (addr[2:0]). SW reserves 2..31\n              and must never write them.\n  addr<48  -> pea[addr[2:0]].{alive,x,row}\n              <= same\n  addr==48 -> cursor_visible, cursor_col[4:2], cursor_row[1:0]\n  addr==49 -> sun_value[13:0]\n  addr==50 -> selected_plant[1:0]")
 - `regs` (class `register`, container with each field as a sub-node, all flip-flops:
   - `plant_present[31:0]`
   - `sunflower_present[31:0]`
@@ -1068,6 +1081,7 @@ Each task below provides:
 - "Reset clears every register to 0."
 - "No vsync latching: each write takes effect on the next clk edge. A write that races a scanline produces one frame of tearing — acceptable at 60 Hz."
 - "Avalon `addressUnits = WORDS` in `pvz_top_hw.tcl`, so the 6-bit `address` is a word index. The driver does `iowrite32(base + word*4)` because the CPU side is byte-addressed."
+- "Decoder uses `else if (address < 6'd40)` (pvz_top.sv:122), so words 2..31 alias into the zombie slot at `zombie[address[2:0]]`. SW must never write addresses 2..31. Documented in `doc/guide/06-register-map.md:143-160`."
 
 ---
 
@@ -1075,7 +1089,7 @@ Each task below provides:
 
 ### Task 4.1: `03-sw/01_process_architecture.d2`
 
-**Read:** `v5-cursor-controller/sw/main.c`, `v5-cursor-controller/sw/game.h`, `v5-cursor-controller/sw/render.h`, `v5-cursor-controller/sw/input.h`.
+**Read:** `sw/main.c` (whole file, especially the loop at 110-150), `sw/game.h`, `sw/render.h`, `sw/input.h`.
 
 **Header:**
 ```
@@ -1089,11 +1103,11 @@ Each task below provides:
 **Direction:** `direction: down`
 
 **Containers / Nodes:**
-- `pvz_binary` (class `sw_module`, label "/.pvz binary (one process, one thread)")
-  - `main`   ("main.c — 60 Hz loop:\n input_poll -> game_tick -> render_frame -> sleep")
+- `pvz_binary` (class `sw_module`, label "./pvz binary (one process, one thread)")
+  - `main`   ("main.c — 60 Hz loop:\nprocess_input(&gs) ->\ngame_update(&gs) ->\nrender_frame(&gs) ->\nusleep(FRAME_USEC - elapsed)")
   - `game`   ("game.c / game.h — state + rules")
   - `render` ("render.c — game state -> ioctl writes")
-  - `input`  ("input.c — evdev decode")
+  - `input`  ("input.c — evdev decode (input_poll())")
 - `kernel` (class `kernel_module`, label "Linux kernel")
   - `pvz_drv` ("pvz_driver.ko — misc dev /dev/pvz")
   - `evdev`   ("evdev — /dev/input/eventN")
@@ -1103,11 +1117,11 @@ Each task below provides:
 
 ### Task 4.2: `03-sw/02_kernel_driver.d2`
 
-**Read:** `v5-cursor-controller/sw/pvz_driver.c` (full file), `v5-cursor-controller/sw/pvz.h`.
+**Read:** `sw/pvz_driver.c` (full file — pay attention to `pvz_init` at line 127 calling `platform_driver_probe` NOT `platform_driver_register`; and `pvz_probe` at line 61 calling `misc_register` BEFORE `of_address_to_resource`/`request_mem_region`/`of_iomap`), `sw/pvz.h`.
 
 **Header:**
 ```
-# Title:       pvz_driver internals (init, ioctl, cleanup)
+# Title:       pvz_driver internals (init, probe, ioctl, cleanup)
 # Section:     03-sw
 # Documents:   sw/pvz_driver.c, sw/pvz_driver.h, sw/pvz.h
 # Defends:     "Walk us through the kernel module."
@@ -1117,29 +1131,38 @@ Each task below provides:
 **Direction:** `direction: down`
 
 **Containers:**
-- `init` (label "Module load")
-  - Nodes (in order):
+- `init` (label "Module load — pvz_init() at sw/pvz_driver.c:127")
+  - Nodes (in order; note `pvz_init` calls `platform_driver_probe`, the legacy entry that performs registration AND immediate probing if a device exists):
     - `pvz_init` ("pvz_init() — module_init hook")
-    - `pdrv_register` ("platform_driver_register(&pvz_driver)")
-    - `probe` ("pvz_probe(struct platform_device *)")
-    - `of_iomap` ("of_iomap(of_node, 0)\n-> virt_base")
-    - `miscreg` ("misc_register(&pvz_misc) -> /dev/pvz")
-- `runtime` (label "ioctl write path")
+    - `pdrv_probe` ("platform_driver_probe(&pvz_driver, pvz_probe)\n(registers driver AND calls pvz_probe if the DT node already matches)")
+- `probe` (label "pvz_probe() at sw/pvz_driver.c:61")
+  - Nodes in source order:
+    - `miscreg` ("misc_register(&pvz_misc_device)\n-> /dev/pvz appears now (BEFORE iomap)")
+    - `of_addr` ("of_address_to_resource(of_node, 0, &dev.res)\n-> physical addr range")
+    - `req_mem` ("request_mem_region(start, size, DRIVER_NAME)\n-> claim the I/O window")
+    - `of_iomap` ("of_iomap(of_node, 0)\n-> dev.virtbase (kernel virtual base)")
+    - `pr_info` ("pr_info(DRIVER_NAME ': initialized at 0x%08lx', dev.res.start)")
+  - Note: failure at any of `of_addr`/`req_mem`/`of_iomap` jumps to `out_deregister` (or `out_release_mem_region`), which undoes the partial init in reverse.
+- `runtime` (label "ioctl write path — pvz_ioctl() at sw/pvz_driver.c:30")
   - `open` ("open(/dev/pvz)")
   - `pvz_ioctl` ("pvz_ioctl(cmd, arg)")
-  - `copy_from_user` ("copy_from_user(&arg, ...)")
-  - `bounds_check` ("if (arg.word_index >= PVZ_NUM_REGS) return -EINVAL")
-  - `iowrite32_call` ("iowrite32(arg.value, virt_base + arg.word_index*4)")
-- `exit` (label "Module unload")
-  - `pvz_remove` ("pvz_remove() -> iounmap, misc_deregister, platform_driver_unregister")
+  - `copy` ("copy_from_user(&w, (pvz_write_arg_t*)arg, sizeof(w))\n-> -EACCES on fault")
+  - `bounds_check` ("if (w.word_index >= PVZ_NUM_REGS) return -EINVAL")
+  - `iowrite32_call` ("iowrite32(w.value, dev.virtbase + w.word_index*4)")
+- `exit` (label "Module unload — pvz_remove() at sw/pvz_driver.c:101")
+  - `pvz_remove` ("iounmap(dev.virtbase) ->\nrelease_mem_region ->\nmisc_deregister(&pvz_misc_device)")
+  - `pvz_exit` ("pvz_exit() -> platform_driver_unregister(&pvz_driver)")
 
-**Edges:** init flow vertically; runtime flow vertically; arrow from `open` to `pvz_ioctl` labeled "ioctl(PVZ_WRITE_REG)".
+**Edges:** init flow -> probe sequence (vertical chain in source order); runtime flow vertically; arrow from `open` to `pvz_ioctl` labelled "ioctl(PVZ_WRITE_REG)".
 
-**Notes:** "Compatible string must match across `_hw.tcl`, generated DT, and `of_match_table` — `csee4840,pvz_gpu-1.0`."
+**Notes:**
+- "Compatible string must match across `_hw.tcl`, generated DT, and `of_match_table` — `csee4840,pvz_gpu-1.0`."
+- "`pvz_init` uses `platform_driver_probe`, which is the legacy API and requires the DT node to be present at registration time. If the device is added later (hotplug), it won't be probed — fine here because the DT entry is fixed at boot."
+- "`misc_register` is called BEFORE the I/O window is mapped (pvz_driver.c:65, then iomap at :83). Userspace can theoretically `open(/dev/pvz)` between those steps; ioctls would still work because the bounds check happens before the `iowrite32` reaches the uninitialised pointer — but in practice `pvz_init` blocks until probe returns, so this race is academic."
 
 ### Task 4.3: `03-sw/03_game_state_er.d2`
 
-**Read:** `v5-cursor-controller/sw/game.h` (struct definitions).
+**Read:** `sw/game.h` (struct definitions).
 
 **Header:**
 ```
@@ -1173,7 +1196,7 @@ Each task below provides:
 
 ### Task 4.4: `03-sw/04_game_loop_fsm.d2`
 
-**Read:** `v5-cursor-controller/sw/game.c` (look for `g->state =` writes), `v5-cursor-controller/sw/game.h` (STATE_*).
+**Read:** `sw/game.c` (look for `g->state =` writes), `sw/game.h` (STATE_*).
 
 **Header:**
 ```
@@ -1189,42 +1212,46 @@ Each task below provides:
 **States (class `fsm_state`):** `INIT`, `PLAYING`, `WIN`, `LOSE`.
 
 **Transitions:**
-- `INIT -> PLAYING`: "sun=100, grid empty, cursor at (0,0)"
-- `PLAYING -> LOSE`: "any zombie reaches x<=0"
-- `PLAYING -> WIN`: "all 5 zombies spawned and killed"
-- `WIN -> exit` and `LOSE -> exit` (terminal states; main loop exits on either)
+- `INIT -> PLAYING`: "game_init(): sun=100, grid empty, cursor at (0,0)"
+- `PLAYING -> LOSE`: "any zombie's x_pixel <= GAME_AREA_X (=64); set inside update_zombies at game.c:142-144"
+- `PLAYING -> WIN`: "all TOTAL_ZOMBIES (=5) spawned and no zombies active; set in check_win at game.c:280-285"
+- `WIN -> exit` and `LOSE -> exit` (terminal states; main loop in sw/main.c:133-144 renders one final frame, sleep 5s, then break)
 
 ### Task 4.5: `03-sw/05_game_update_flow.d2`
 
-**Read:** `v5-cursor-controller/sw/game.c` (game_tick implementation), `v5-cursor-controller/sw/game.h` (constants).
+**Read:** `sw/game.c:288-302` (`game_update` body — this is the canonical phase order), and the bodies of `update_sun`, `update_spawning`, `update_firing`, `update_projectiles`, `update_zombies`, `check_collisions`, `check_win` defined earlier in the same file. `sw/game.h` for constants.
 
 **Header:**
 ```
-# Title:       game_tick() per-frame update order
+# Title:       game_update() per-frame phase order
 # Section:     03-sw
-# Documents:   sw/game.c (game_tick)
-# Defends:     "What is the exact order of operations each frame?"
+# Documents:   sw/game.c (game_update at line 288; input handled separately in sw/main.c::process_input)
+# Defends:     "What is the exact order of phases each frame, and where does input fit?"
 # Detail:      block
 ```
 
 **Direction:** `direction: down`
 
-**Nodes (sequential, class `sw_module`):**
-1. `apply_input` "apply input action (cursor move, place plant, remove plant, tab)"
-2. `tick_zombies` "advance each zombie 1 px every ZOMBIE_SPEED_FRAMES; check eating; on eat tick damage plant"
-3. `tick_peas` "advance each pea PEA_SPEED px"
-4. `tick_plants` "every PLANT_FIRE_COOLDOWN frames, if a zombie is in the row to the right, spawn a pea"
-5. `collision_pea_zombie` "for each pea, find leftmost zombie in same row covering pea x; zombie hp--; pea cleared"
-6. `cleanup` "remove dead zombies/plants; clear inactive entities"
-7. `spawn_zombie` "every ZOMBIE_SPAWN_MIN..MAX frames, spawn a new zombie at x=640"
-8. `sun_economy` "every SUN_INTERVAL frames, sun += SUN_INCREMENT"
-9. `check_win_lose` "set STATE_WIN or STATE_LOSE if conditions met"
+**Important:** input handling is NOT inside `game_update`. The main loop calls `process_input(&gs)` first (sw/main.c:114), then `game_update(&gs)` (sw/main.c:119), then `render_frame(&gs)` (sw/main.c:122). This diagram covers the `game_update` phases only.
 
-**Edges:** straight vertical chain.
+**Nodes (sequential, class `sw_module`; match `game.c:295-301` exactly):**
+1. `early_return` "if (gs->state != STATE_PLAYING) return;"
+2. `frame_inc` "gs->frame_count++"
+3. `update_sun` "every SUN_INTERVAL (480) frames: gs->sun += SUN_INCREMENT (25)"
+4. `update_spawning` "spawn next zombie if frame_count is in window; uses srand-seeded RNG"
+5. `update_firing` "for each peashooter in the grid: if cooldown==0 AND any zombie in row to the right -> spawn a pea, reset cooldown to PLANT_FIRE_COOLDOWN (120)"
+6. `update_projectiles` "for each active pea: x_pixel += PEA_SPEED (2); deactivate at right edge"
+7. `update_zombies` "for each active zombie: if eating -> tick eat timer, on bite damage plant; else -> move 1 px every ZOMBIE_SPEED_FRAMES (3)"
+8. `check_collisions` "for each active pea vs each active zombie in same row: bbox overlap -> zombie.hp -= PEA_DAMAGE (1); pea cleared; on zombie.hp==0 zombies_killed++"
+9. `check_win` "if any active zombie -> still playing; else if zombies_spawned == TOTAL_ZOMBIES (5) -> STATE_WIN"
+
+**Edges:** straight vertical chain; `early_return` short-circuits the rest.
+
+**Notes:** "Lose condition is set inside `update_zombies`, NOT in `check_win` — see `sw/game.c:142-145`: when a zombie's `x_pixel <= GAME_AREA_X` (=64, the lawn left edge), it sets `gs->state = STATE_LOSE` and returns. `check_win` only handles the WIN case."
 
 ### Task 4.6: `03-sw/06_input_pipeline.d2`
 
-**Read:** `v5-cursor-controller/sw/input.c` (full file), `v5-cursor-controller/sw/input.h`.
+**Read:** `sw/input.c` (full file), `sw/input.h`.
 
 **Header:**
 ```
@@ -1243,16 +1270,16 @@ Each task below provides:
 - `open_call` (class `sw_module`, "input_init(): open(path, O_RDONLY|O_NONBLOCK)")
 - `read_loop` (class `sw_module`, "input_poll(): read(fd, &ev, sizeof ev)\nrepeat until EAGAIN")
 - `decode` (class `sw_module`, "if ev.type==EV_KEY && ev.value!=0: map ev.code -> action_t")
-- `actions` (class `signal`, "INPUT_UP, _DOWN, _LEFT, _RIGHT,\nINPUT_PLACE, INPUT_REMOVE,\nINPUT_TAB, INPUT_QUIT")
-- `game` (class `sw_module`, "game_tick(action)")
+- `actions` (class `signal`, "INPUT_NONE=0, INPUT_UP=1, INPUT_DOWN=2,\nINPUT_LEFT=3, INPUT_RIGHT=4,\nINPUT_SPACE=5, INPUT_D=6, INPUT_ESC=7,\nINPUT_TAB=8  (from sw/input.h)")
+- `main_loop` (class `sw_module`, "main.c::process_input(&gs)\nwhile ((key = input_poll()) != INPUT_NONE) ... ")
 
-**Edges:** `usb_keyboard -> kernel_evdev -> open_call -> read_loop -> decode -> actions -> game`.
+**Edges:** `usb_keyboard -> kernel_evdev -> open_call -> read_loop -> decode -> actions -> main_loop`.
 
-**Notes:** "Recent commit `fc14c06` added Xbox 360 gamepad button mapping in the same `input_poll`."
+**Notes:** "Recent commit `fc14c06` added Xbox 360 gamepad button mapping in the same `input_poll`. Verify the action names against sw/input.h — they are the canonical source."
 
 ### Task 4.7: `03-sw/07_render_mapping.d2`
 
-**Read:** `v5-cursor-controller/sw/render.c` (full file), `v5-cursor-controller/sw/pvz.h` (PVZ_REG_*, pvz_pack_entity, pvz_pack_cursor).
+**Read:** `sw/render.c` (full file), `sw/pvz.h` (PVZ_REG_*, pvz_pack_entity, pvz_pack_cursor).
 
 **Header:**
 ```
@@ -1286,7 +1313,7 @@ Each task below provides:
 
 ### Task 5.1: `04-interface/01_avalon_bus.d2`
 
-**Read:** `v5-cursor-controller/hw/pvz_top_hw.tcl`, `v5-cursor-controller/sw/pvz_driver.c`, `v5-cursor-controller/doc/reference-design/lab3/description/description.md` (Avalon address-units gotcha).
+**Read:** `hw/pvz_top_hw.tcl`, `sw/pvz_driver.c`, `doc/reference-design/lab3/description/description.md` (Avalon address-units gotcha).
 
 **Header:**
 ```
@@ -1314,7 +1341,7 @@ Each task below provides:
 
 ### Task 5.2: `04-interface/02_ioctl_path.d2`
 
-**Read:** `v5-cursor-controller/sw/pvz_driver.c` (full file), `v5-cursor-controller/sw/render.c` (`write_reg` helper), `v5-cursor-controller/hw/pvz_top.sv:94-148`.
+**Read:** `sw/pvz_driver.c` (full file), `sw/render.c` (`write_reg` helper), `hw/pvz_top.sv:94-148`.
 
 **Header:**
 ```
@@ -1349,7 +1376,7 @@ Each task below provides:
 
 ### Task 5.3: `04-interface/04_device_tree_binding.d2`
 
-**Read:** `v5-cursor-controller/hw/pvz_top_hw.tcl`, `v5-cursor-controller/sw/pvz_driver.c` (look for `of_match_table`), `v5-cursor-controller/doc/reference-design/lab3/description/description.md`.
+**Read:** `hw/pvz_top_hw.tcl`, `sw/pvz_driver.c` (look for `of_match_table`), `doc/reference-design/lab3/description/description.md`.
 
 **Header:**
 ```
@@ -1377,11 +1404,13 @@ Each task below provides:
 
 ---
 
-## Phase 6 — Cross-cutting (6 tasks)
+## Phase 6 — Cross-cutting (5 tasks)
+
+*Note: an earlier draft included a `06_test_architecture.d2` diagram (ModelSim TBs, on-board test programs, host `test_game`). None of those exist on this branch — `hw/tb/`, `sw/test/`, `.github/`, and `deploy.sh` are all absent (`doc/guide/README.md:61` explicitly says so). Diagram dropped.*
 
 ### Task 6.1: `05-cross-cutting/01_frame_timing.d2`
 
-**Read:** `v5-cursor-controller/sw/main.c` (FRAME_USEC), `v5-cursor-controller/sw/render.c`.
+**Read:** `sw/main.c` (FRAME_USEC), `sw/render.c`.
 
 **Header:**
 ```
@@ -1395,17 +1424,17 @@ Each task below provides:
 **Direction:** `direction: right`
 
 **Nodes (linear, class `sw_module` except the last):**
-- `t0` "input_poll (~us, non-blocking)"
-- `t1` "game_tick (~us, all in C)"
-- `t2` "render_frame: up to 51 ioctl writes (~us)"
-- `t3` "usleep until next 16.67 ms boundary"
-- `vga_tick` (class `hw_module`) "VGA scan: 525 lines × 800 px = ~16.67 ms, completely independent"
+- `t0` "process_input(&gs) (~us, non-blocking input_poll loop)"
+- `t1` "game_update(&gs) (~us, all in C)"
+- `t2` "render_frame(&gs): up to 51 ioctl writes (~us)"
+- `t3` "usleep(FRAME_USEC - elapsed)  // FRAME_USEC = 16667"
+- `vga_tick` (class `hw_module`) "VGA scan: 525 lines × 800 px = ~16.67 ms, completely independent of the SW loop"
 
 **Notes:** "Writes can land mid-scan; there's no vsync latching. Tearing window = duration of writes (~us) ≪ 16.67 ms, so visible artifacts are rare and brief."
 
 ### Task 6.2: `05-cross-cutting/02_vga_timing.d2`
 
-**Read:** `v5-cursor-controller/hw/vga_counters.sv`.
+**Read:** `hw/vga_counters.sv`.
 
 **Header:**
 ```
@@ -1434,7 +1463,7 @@ Each task below provides:
 
 ### Task 6.3: `05-cross-cutting/03_pixel_pipeline_timing.d2`
 
-**Read:** `v5-cursor-controller/hw/entity_drawer.sv:280-358`.
+**Read:** `hw/entity_drawer.sv:280-358`.
 
 **Header:**
 ```
@@ -1456,13 +1485,13 @@ Each task below provides:
 
 ### Task 6.4: `05-cross-cutting/04_build_pipeline.d2`
 
-**Read:** `v5-cursor-controller/hw/Makefile`, `v5-cursor-controller/sw/Makefile`, `v5-cursor-controller/.github/workflows/build.yml`.
+**Read:** `hw/Makefile` (whole file), `sw/Makefile` (whole file). Do NOT include CI / GitHub Actions content — `.github/` is absent on this branch (verified, and stated in `doc/guide/README.md:61`).
 
 **Header:**
 ```
-# Title:       Build pipeline (HW, SW, CI)
+# Title:       Build pipeline (HW + SW)
 # Section:     05-cross-cutting
-# Documents:   hw/Makefile, sw/Makefile, .github/workflows/build.yml
+# Documents:   hw/Makefile, sw/Makefile
 # Defends:     "How is everything built and where do artifacts come from?"
 # Detail:      block
 ```
@@ -1471,96 +1500,52 @@ Each task below provides:
 
 **Containers / Nodes:**
 - `hw_lane` (label "HW (workstation, Quartus)")
-  - `make_qsys` "make qsys -> SystemVerilog"
-  - `make_quartus` "make quartus -> .sof"
-  - `make_rbf` "make rbf -> .rbf"
-  - `make_dtb` "make dtb -> .dtb"
-- `sw_native_lane` (label "SW native (on-board)")
-  - `make_module` "make module -> pvz_driver.ko"
-  - `make_pvz` "make pvz -> pvz binary"
-  - `make_tests` "make test_* -> test_shapes, test_input, test_game"
-- `ci_lane` (label "CI (GitHub Actions)")
-  - `build_sw_job` "build-sw: ARM cross-compile (arm-linux-gnueabihf-gcc, kernel 4.19)"
-  - `test_host_job` "test-host: test_game on x86"
-  - `release_job` "release (on v* tag): attach binaries + deploy.sh to GH release"
-- `sdcard` (class `external`, "SD card: .rbf + .dtb + Linux rootfs")
-- `board_install` (class `external`, "Board install: pvz_driver.ko, pvz, test binaries")
+  - `make_qsys` "make qsys -> qsys-generate --synthesis=VERILOG"
+  - `make_quartus` "make quartus -> quartus_sh --flow compile -> .sof"
+  - `make_rbf` "make rbf -> quartus_cpf -> .rbf"
+  - `make_dtb` "make dtb -> sopc2dts | dtc -> .dtb (requires embedded_command_shell.sh)"
+- `sw_lane` (label "SW (on-board native build by default; cross-compile via CC/ARCH/CROSS_COMPILE/KERNEL_SOURCE vars)")
+  - `make_module` "make module -> kbuild against /usr/src/linux-headers-$(uname -r) -> pvz_driver.ko"
+  - `make_pvz` "make pvz -> gcc -Wall -O2 -o pvz main.c game.c render.c input.c -lpthread"
+- `sdcard` (class `external`, "SD card: .rbf + .dtb on the FAT partition; Linux rootfs on the ext partition")
+- `board_install` (class `external`, "Board side: copy pvz_driver.ko + pvz onto board; insmod + run")
 
-**Edges:** all three lanes converge — hw_lane outputs go to sdcard; sw_native_lane outputs go to board_install; ci_lane outputs go to board_install (via deploy.sh download).
+**Edges:** hw_lane outputs go to sdcard; sw_lane outputs go to board_install. sdcard -> board_install (the board reads it at boot).
 
-**Notes:** "`worktree.sh` is a developer-side branch helper, not part of the system. See proposal §dev-workflow."
+**Notes:** "CI/CD, `deploy.sh`, and test programs mentioned in the stale top-level `README.md` and `CLAUDE.md` are not present on this branch. `doc/guide/README.md:61` confirms."
 
-### Task 6.5: `05-cross-cutting/05_boot_deploy.d2`
+### Task 6.5: `05-cross-cutting/05_boot_flow.d2`
 
-**Read:** `v5-cursor-controller/README.md` (deploy section), `v5-cursor-controller/deploy.sh`.
+**Read:** `doc/guide/08-build-and-run.md` (boot/deploy section as documented on this branch). `deploy.sh` is absent — do NOT diagram it.
 
 **Header:**
 ```
-# Title:       Cold boot + deploy.sh runtime install
+# Title:       Cold boot (preloader -> U-Boot -> Linux -> insmod)
 # Section:     05-cross-cutting
-# Documents:   README.md (deploy), deploy.sh
-# Defends:     "How does the board come up and how do we install/run the game?"
+# Documents:   doc/guide/08-build-and-run.md (boot/install steps), sw/pvz_driver.c (probe)
+# Defends:     "How does the board come up from power-on to a running game?"
 # Detail:      block
 ```
 
-**Direction:** `direction: down` (with two layers using `shape: sequence_diagram`).
+**Direction:** `direction: down` using `shape: sequence_diagram`.
 
-**Participants (cold boot lane):**
-- `power`, `bootrom`, `uboot`, `kernel`, `rootfs`
+**Participants (single lane — there is no deploy.sh on this branch):**
+- `power`, `preloader`, `uboot`, `kernel`, `rootfs`, `user`, `pvz_drv`, `pvz`
 
-**Messages (cold boot):**
-1. `power -> bootrom`: "power on"
-2. `bootrom -> uboot`: "load + jump"
+**Messages (in order):**
+1. `power -> preloader`: "power on; BootROM hands off"
+2. `preloader -> uboot`: "load U-Boot from SD"
 3. `uboot -> uboot`: "fatload mmc 0:1 ${fpgadata} soc_system.rbf"
-4. `uboot -> uboot`: "fpga load 0 ${fpgadata} ${filesize}"
-5. `uboot -> uboot`: "run bridge_enable_handoff"
+4. `uboot -> uboot`: "fpga load 0 ${fpgadata} ${filesize}  // program FPGA fabric"
+5. `uboot -> uboot`: "run bridge_enable_handoff  // open HPS-to-FPGA bridge"
 6. `uboot -> kernel`: "boot Linux with soc_system.dtb"
-7. `kernel -> rootfs`: "mount, exec init"
+7. `kernel -> rootfs`: "mount, exec /sbin/init"
+8. `user -> kernel`: "insmod pvz_driver.ko  // manual on serial console"
+9. `kernel -> pvz_drv`: "pvz_init -> platform_driver_probe -> pvz_probe\nmisc_register('/dev/pvz')"
+10. `user -> pvz`: "./pvz"
+11. `pvz -> pvz_drv`: "open('/dev/pvz'); ioctl(PVZ_WRITE_REG) loop at 60 Hz"
 
-**Participants (deploy.sh lane):**
-- `user`, `deploy_sh`, `kernel`, `pvz_drv`, `pvz`
-
-**Messages (deploy.sh):**
-1. `user -> deploy_sh`: "./deploy.sh setup (one-time: install kernel headers)"
-2. `user -> deploy_sh`: "./deploy.sh download (gh release download latest)"
-3. `user -> deploy_sh`: "./deploy.sh install -> insmod pvz_driver.ko"
-4. `deploy_sh -> kernel`: "module_init -> pvz_probe"
-5. `kernel -> pvz_drv`: "/dev/pvz registered"
-6. `user -> deploy_sh`: "./deploy.sh run -> ./pvz"
-7. `pvz -> pvz_drv`: "open /dev/pvz, start ioctl loop"
-
-### Task 6.6: `05-cross-cutting/06_test_architecture.d2`
-
-**Read:** `v5-cursor-controller/hw/tb/` (testbench list), `v5-cursor-controller/sw/test/`, `v5-cursor-controller/README.md` (Testing section).
-
-**Header:**
-```
-# Title:       Test architecture (where each test runs)
-# Section:     05-cross-cutting
-# Documents:   hw/tb/*, sw/test/*, README.md
-# Defends:     "What's tested and at what level?"
-# Detail:      block
-```
-
-**Direction:** `direction: down`
-
-**Containers / Nodes:**
-- `modelsim_lane` (class `hw_module`, "ModelSim (workstation, no board)")
-  - `tb_vga_counters`, `tb_linebuffer`, `tb_bg_grid`, `tb_shape_renderer`, `tb_pvz_top` (each a small `hw_module` node naming the file under `hw/tb/`)
-- `onboard_lane` (class `kernel_module`, "On-board (DE1-SoC, requires .ko)")
-  - `test_shapes` "Visual: writes a checker + shapes via ioctl"
-  - `test_input`  "Reads /dev/input/eventN, prints decoded keys"
-- `host_lane` (class `sw_module`, "Host-only (any Linux, no HW)")
-  - `test_game` "Pure C unit tests against game.c (12 cases)"
-
-**Edges:**
-- `tb_vga_counters -> hw_module:vga_counters.sv` (label "exercises")
-- analogous for the other testbenches.
-- `test_shapes -> /dev/pvz` (via driver)
-- `test_input -> /dev/input/eventN`
-- `test_game -> game.c` (no HW)
-
-**Notes:** "CI runs `test_game` on x86 every push (`test-host` job). The on-board tests and ModelSim are manual."
+**Notes:** "`deploy.sh`, GitHub Releases, and an automated `download/install/run/test` workflow are mentioned in the stale top-level `README.md` but DO NOT exist on this branch. Boot and install are manual via the serial console."
 
 ---
 
@@ -1568,7 +1553,7 @@ Each task below provides:
 
 ### Task 7.1: `06-flow/02_place_plant.d2`
 
-**Read:** `v5-cursor-controller/sw/game.c` (place_plant logic, sun deduction), `v5-cursor-controller/sw/render.c`, `v5-cursor-controller/hw/entity_drawer.sv:108-264` (selector + plant layers).
+**Read:** `sw/game.c` (place_plant logic, sun deduction), `sw/render.c`, `hw/entity_drawer.sv:108-264` (selector + plant layers).
 
 **Header:**
 ```
@@ -1598,7 +1583,7 @@ Each task below provides:
 
 ### Task 7.2: `06-flow/03_pea_zombie_collision.d2`
 
-**Read:** `v5-cursor-controller/sw/game.c` (collision logic), `v5-cursor-controller/sw/game.h` (PEA_DAMAGE, ZOMBIE_HP).
+**Read:** `sw/game.c` (collision logic), `sw/game.h` (PEA_DAMAGE, ZOMBIE_HP).
 
 **Header:**
 ```
@@ -1622,7 +1607,7 @@ Each task below provides:
 
 ### Task 7.3: `06-flow/04_zombie_eats_plant.d2`
 
-**Read:** `v5-cursor-controller/sw/game.c` (eat logic), `v5-cursor-controller/sw/game.h` (PLANT_HP, ZOMBIE_EAT_COOLDOWN).
+**Read:** `sw/game.c` (eat logic), `sw/game.h` (PLANT_HP, ZOMBIE_EAT_COOLDOWN).
 
 **Header:**
 ```
@@ -1646,7 +1631,7 @@ Each task below provides:
 
 ### Task 7.4: `06-flow/05_sun_economy.d2`
 
-**Read:** `v5-cursor-controller/sw/game.c` (sun accumulator), `v5-cursor-controller/sw/game.h` (SUN_INTERVAL, SUN_INCREMENT).
+**Read:** `sw/game.c` (sun accumulator), `sw/game.h` (SUN_INTERVAL, SUN_INCREMENT).
 
 **Header:**
 ```
@@ -1668,32 +1653,38 @@ Each task below provides:
 
 ### Task 7.5: `06-flow/06_insmod_probe.d2`
 
-**Read:** `v5-cursor-controller/sw/pvz_driver.c` (init, probe), `v5-cursor-controller/hw/pvz_top_hw.tcl` (compatible string).
+**Read:** `sw/pvz_driver.c:61-99` (`pvz_probe`), `:127-131` (`pvz_init` uses `platform_driver_probe`, NOT `platform_driver_register`), `hw/pvz_top_hw.tcl` (compatible string `csee4840,pvz_gpu-1.0`).
 
 **Header:**
 ```
 # Title:       insmod -> probe -> /dev/pvz
 # Section:     06-flow
-# Documents:   sw/pvz_driver.c, hw/pvz_top_hw.tcl
+# Documents:   sw/pvz_driver.c (pvz_init, pvz_probe), hw/pvz_top_hw.tcl
 # Defends:     "Trace driver attach in detail."
 # Detail:      block
 ```
 
 **Direction:** `direction: right` (use `shape: sequence_diagram`).
 
-**Participants:** `user`, `insmod`, `kernel`, `pdrv` (`platform_driver_register`), `dt_walker`, `probe_fn`, `iomap`, `misc`, `devfs`.
+**Participants:** `user`, `insmod`, `kernel`, `pdrv_probe` (`platform_driver_probe`), `dt_walker`, `probe_fn` (`pvz_probe`), `misc`, `of_addr`, `req_mem`, `iomap`, `devfs`.
 
-**Messages:**
+**Messages (match the source order in `pvz_probe`):**
 1. `user -> insmod`: "insmod pvz_driver.ko"
-2. `insmod -> kernel`: "load ELF, run init_module()"
-3. `kernel -> pdrv`: "pvz_init() -> platform_driver_register(&pvz_driver)"
-4. `kernel -> dt_walker`: "walk DT, look for compatible match"
+2. `insmod -> kernel`: "load ELF, run init_module() == pvz_init()"
+3. `kernel -> pdrv_probe`: "platform_driver_probe(&pvz_driver, pvz_probe)\n(registers the driver and probes immediately)"
+4. `pdrv_probe -> dt_walker`: "walk DT, look for of_match_table entries"
 5. `dt_walker -> probe_fn`: "found csee4840,pvz_gpu-1.0 at sopc@0/...\n-> call pvz_probe(pdev)"
-6. `probe_fn -> iomap`: "of_iomap(of_node, 0) -> virt_base"
-7. `probe_fn -> misc`: "misc_register(&pvz_misc)"
-8. `misc -> devfs`: "create /dev/pvz"
+6. `probe_fn -> misc`: "misc_register(&pvz_misc_device)\n-> /dev/pvz appears  (BEFORE iomap)"
+7. `misc -> devfs`: "create /dev/pvz"
+8. `probe_fn -> of_addr`: "of_address_to_resource(of_node, 0, &dev.res)"
+9. `probe_fn -> req_mem`: "request_mem_region(dev.res.start, ...)"
+10. `probe_fn -> iomap`: "of_iomap(of_node, 0) -> dev.virtbase"
+11. `probe_fn -> kernel`: "pr_info('initialized at 0x%08lx', dev.res.start) -> return 0"
 
-**Notes:** "Verify success with `dmesg | tail` and `ls /dev/pvz`."
+**Notes:**
+- "`pvz_init` uses the legacy `platform_driver_probe()`, which combines registration with an immediate probe if a matching DT node is already present. Fine here because the DT entry is fixed at boot."
+- "Source order matters: `misc_register` is called BEFORE the I/O window is mapped (`pvz_driver.c:65,83`). The diagram preserves this order."
+- "Verify success on the board with `dmesg | tail` (look for `pvz_gpu: initialized at 0x...`) and `ls /dev/pvz`."
 
 ---
 
@@ -1704,20 +1695,19 @@ Each task below provides:
 - [ ] **Step 1: Clean and re-render everything**
 
 ```bash
-cd v5-cursor-controller/doc/diagrams
-make clean
-make all
+make -C doc/diagrams clean
+make -C doc/diagrams all
 ```
 Expected: exit 0. Count outputs:
 ```bash
-find . -name '*.d2' ! -name 'common.d2' | wc -l   # 36
-find . -name '*.svg' | wc -l                       # 36
-find . -name '*.png' | wc -l                       # 36
+find doc/diagrams -name '*.d2' ! -name 'common.d2' | wc -l   # 35
+find doc/diagrams -name '*.svg' | wc -l                       # 35
+find doc/diagrams -name '*.png' | wc -l                       # 35
 ```
 
 If the counts disagree, find the offender:
 ```bash
-for f in $(find . -name '*.d2' ! -name 'common.d2'); do
+for f in $(find doc/diagrams -name '*.d2' ! -name 'common.d2'); do
   test -f "${f%.d2}.svg" || echo "missing svg: $f"
   test -f "${f%.d2}.png" || echo "missing png: $f"
 done
@@ -1727,8 +1717,8 @@ done
 
 If `git status` shows changed `.svg`/`.png` (because rendering is sensitive to D2 version), commit them:
 ```bash
-git add v5-cursor-controller/doc/diagrams
-git -c commit.gpgsign=false commit -m "docs(diagrams): re-render full catalog (36/36)"
+git add doc/diagrams
+git -c commit.gpgsign=false commit -m "docs(diagrams): re-render full catalog (35/35)"
 ```
 Skip if the working tree is already clean.
 
@@ -1737,17 +1727,16 @@ Skip if the working tree is already clean.
 - [ ] **Step 1: Confirm every link in `doc/diagrams/README.md` resolves**
 
 ```bash
-cd v5-cursor-controller/doc/diagrams
-grep -oE '\(([0-9]{2}-[^)]+\.d2)\)' README.md | tr -d '()' | while read p; do
-  test -f "$p" || echo "broken link: $p"
+grep -oE '\(([0-9]{2}-[^)]+\.d2)\)' doc/diagrams/README.md | tr -d '()' | while read p; do
+  test -f "doc/diagrams/$p" || echo "broken link: $p"
 done
 ```
-Expected: no output (all 36 links resolve).
+Expected: no output (all 35 links resolve).
 
 - [ ] **Step 2: If any link is broken, fix the README and commit**
 
 ```bash
-git add v5-cursor-controller/doc/diagrams/README.md
+git add doc/diagrams/README.md
 git -c commit.gpgsign=false commit -m "docs(diagrams): fix README cross-references"
 ```
 
@@ -1759,9 +1748,9 @@ The diagrams must agree with the real source. Pick the four hot-spot / hero diag
 
 For each port mentioned in the diagram, grep:
 ```bash
-grep -nE 'input  logic|output logic' v5-cursor-controller/hw/entity_drawer.sv
+grep -nE 'input  logic|output logic' hw/entity_drawer.sv
 ```
-Bit-widths in the diagram must match `[N:0]` declarations. Fix the diagram if any mismatch.
+Bit-widths in the diagram must match `[N:0]` declarations. Also confirm the diagram says "color_out is combinational (always_comb at line 330), NOT a separately registered output." Fix the diagram if any mismatch.
 
 - [ ] **Step 2: Verify `02-hw/09_pvz_top_regfile_signals.d2` against `hw/pvz_top.sv:94-148`**
 
@@ -1771,14 +1760,23 @@ The address comparisons in the diagram (`addr<40`, `addr<48`, `addr==48`, `addr=
 
 Word indices, field names, and bit ranges must match all three sources.
 
-- [ ] **Step 4: Verify `06-flow/01_one_frame.d2` against `sw/main.c` loop body and `sw/render.c::render_frame`**
+- [ ] **Step 4: Verify `06-flow/01_one_frame.d2` against `sw/main.c:107-150` loop body and `sw/game.c:288-302` `game_update`**
 
-The order of phases in the diagram (input_poll, game_tick, render_frame, sleep) must match `main()` in `sw/main.c`.
+The phases in the diagram must match the source exactly:
+1. main: `process_input(&gs)` (sw/main.c:114)
+2. main: `game_update(&gs)` (sw/main.c:119)
+3. main: `render_frame(&gs)` (sw/main.c:122)
+4. main: `usleep(FRAME_USEC - elapsed)` (sw/main.c:149)
+
+And the phases inside `game_update` (sw/game.c:295-301) in this order:
+`update_sun -> update_spawning -> update_firing -> update_projectiles -> update_zombies -> check_collisions -> check_win`.
+
+Do NOT name anything `game_tick` — that function does not exist.
 
 - [ ] **Step 5: Commit any fixes from steps 1–4**
 
 ```bash
-git add v5-cursor-controller/doc/diagrams
+git add doc/diagrams
 git -c commit.gpgsign=false commit -m "docs(diagrams): cross-check fixups against source-of-truth"
 ```
 Skip if no diagrams needed correction.
@@ -1790,11 +1788,11 @@ Skip if no diagrams needed correction.
 1. **Spec coverage.** Each spec section has tasks:
    - §3 Folder layout → Task 0.1
    - §3 `common.d2` → Task 0.2
-   - §3 D2 conventions → Task 0.2 (in `common.d2`) + Phase 1 examples
+   - §3 D2 conventions → Task 0.2 (in `common.d2`) + Phase 1 examples (use `...@../common.d2` — no colon)
    - §3 Per-file header comment → embedded in every diagram task
-   - §4 Catalog of 36 diagrams → Tasks 1.1–1.4 + 2.1–7.5 (one task per diagram)
+   - §4 Catalog of 35 diagrams → Tasks 1.1–1.4 + 2.1–7.5 (one task per diagram; `06_test_architecture.d2` dropped because the test surfaces don't exist on this branch)
    - §5 Rendering/Makefile → Task 0.3
-   - §6 Acceptance criteria 1 (all .d2 exist) → Phase 8.1 count check
+   - §6 Acceptance criteria 1 (all .d2 exist) → Phase 8.1 count check (35 each)
    - §6 Acceptance criteria 2 (common.d2 imported) → Phase 1 examples + per-task header convention
    - §6 Acceptance criteria 3 (renders clean) → Phase 8.1
    - §6 Acceptance criteria 4 (factually grounded) → Phase 8.3 cross-check
@@ -1805,5 +1803,8 @@ Skip if no diagrams needed correction.
 
 3. **Type / name consistency.**
    - Class names (`hw_module`, `sw_module`, `kernel_module`, `register`, `signal`, `bus`, `fsm_state`, `external`, `note`, `layer`) introduced in Task 0.2 are used consistently in every later task.
-   - File-path prefixes use `v5-cursor-controller/doc/diagrams/` everywhere.
+   - All shell snippets run from the `v5-cursor-controller` worktree root with repo-relative paths (no `v5-cursor-controller/` prefix inside the worktree).
    - Register-map fields use the exact names in the source: `PLANTS`, `SUNFLOWER`, `ZOMBIE[i]`, `PEA[i]`, `CURSOR`, `SUN`, `SELECTED` (matching `pvz.h:42-48` and `pvz_top.sv:9-20`).
+   - SW function names match the source: `process_input` (sw/main.c:34), `game_update` (sw/game.c:288), `render_frame` (sw/render.c). The name `game_tick` does NOT appear anywhere in the plan.
+   - Driver flow matches the source order: `platform_driver_probe` (NOT `platform_driver_register`) in `pvz_init` at sw/pvz_driver.c:130; inside `pvz_probe`, `misc_register` (line 65) runs BEFORE `of_address_to_resource` / `request_mem_region` / `of_iomap` (lines 71/77/83).
+   - HW facts: `bg_grid` background = `COL_BLUE` (idx 13) outside the lawn (hw/bg_grid.sv:48); `entity_drawer.color_out` is combinational (`always_comb` at hw/entity_drawer.sv:330), not a separately registered output; the decoder uses `else if (address < 6'd40)` so words 2..31 alias into `zombie[address[2:0]]` (hw/pvz_top.sv:122).
