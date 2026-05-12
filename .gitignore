@@ -3,6 +3,9 @@
 .codex/
 .gemini/
 
+# Brainstorming / spec scratchpad — not for the project repo
+/docs/superpowers/
+
 # OS junk
 .DS_Store
 Thumbs.db
