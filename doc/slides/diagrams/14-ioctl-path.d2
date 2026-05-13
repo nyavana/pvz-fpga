@@ -1,0 +1,16 @@
+...@_style.d2
+
+flow: {
+  class: group
+  grid-rows: 2
+  grid-columns: 2
+
+  user: "render.c\nioctl(fd, PVZ_WRITE_REG, &arg)" { class: hps }
+  driver: "pvz_driver.ko  -  pvz_ioctl()\ncopy_from_user + bounds check\niowrite32(virtbase + word*4)" { class: krn }
+  bus: "Avalon-MM\nlightweight HPS-FPGA bridge" { class: bus }
+  regfile: "pvz_top register file\nlatch on (chipselect && write)" { class: hw }
+
+  user -> driver: "syscall"
+  driver -> bus: "MMIO write"
+  bus -> regfile: "address + writedata"
+}

@@ -1,0 +1,30 @@
+...@_style.d2
+
+direction: down
+
+userspace: "Userspace  -  /sw/pvz binary" {
+  class: group
+
+  main: "main.c\n60 Hz game loop" { class: hps }
+  game: "game.c\nsimulation state" { class: hps }
+  render: "render.c\nstate -> register writes" { class: hps }
+  input: "input.c\nevdev keyboard reader" { class: hps }
+
+  main -> game
+  main -> render
+  main -> input
+}
+
+dev: "/dev/pvz\nmisc character device" { class: bus }
+
+kernel: "Kernel  -  pvz_driver.ko" {
+  class: group
+
+  driver: "pvz_driver.c\nplatform driver\nioctl -> iowrite32" { class: krn }
+}
+
+avalon: "Avalon-MM @ 0xff200000\n-> pvz_top in FPGA" { class: bus }
+
+userspace.render -> dev: "ioctl(PVZ_WRITE_REG)"
+dev -> kernel.driver
+kernel.driver -> avalon: "iowrite32"

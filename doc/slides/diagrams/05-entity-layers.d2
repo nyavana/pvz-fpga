@@ -1,0 +1,16 @@
+...@_style.d2
+
+direction: down
+
+top_note: "Later layers overwrite earlier ones.\n0xFF in sprite ROM = transparent (skip)." { class: note }
+
+L1: "1. Background  -  lawn checker" { class: hw }
+L2: "2. Plants  -  peashooter sprite" { class: hw }
+L3: "3. Sunflowers  -  sunflower sprite" { class: hw }
+L4: "4. Peas  -  procedural 8x8 squares" { class: hw }
+L5: "5. Zombies  -  zombie sprite" { class: hw }
+L6: "6. Cursor  -  yellow selector border" { class: mark }
+L7: "7. Sun HUD  -  yellow blocks at top" { class: mark }
+L8: "8. Plant selector  -  bottom plant picker" { class: mark }
+
+L1 -> L2 -> L3 -> L4 -> L5 -> L6 -> L7 -> L8

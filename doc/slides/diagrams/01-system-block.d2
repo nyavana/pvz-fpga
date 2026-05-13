@@ -1,0 +1,23 @@
+...@_style.d2
+
+direction: right
+
+keyboard: "USB keyboard" { class: ext }
+
+de1soc: "DE1-SoC (Cyclone V)" {
+  class: group
+  grid-rows: 3
+  grid-columns: 1
+
+  hps: "HPS\nARM Cortex-A9 + Linux" { class: hps }
+  bridge: "HPS-to-FPGA bridge\nAvalon-MM @ 0xff200000" { class: bus }
+  fpga: "FPGA fabric\npvz_top" { class: hw }
+
+  hps -> bridge: "iowrite32"
+  bridge -> fpga: "32-bit writes"
+}
+
+monitor: "VGA monitor\n640x480 @ 60 Hz" { class: ext }
+
+keyboard -> de1soc.hps: "USB / evdev"
+de1soc.fpga -> monitor: "RGB + HS/VS"

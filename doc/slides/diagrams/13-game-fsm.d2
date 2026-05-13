@@ -1,0 +1,19 @@
+...@_style.d2
+
+direction: right
+
+init: "game_init\nset PLAYING, sun = 100" { class: hps }
+
+playing: "PLAYING" { class: flow }
+win: "WIN" { class: flow }
+lose: "LOSE" { class: flow }
+exit: "EXIT" { class: mark }
+
+init -> playing
+
+playing -> win: "all zombies dead\n(check_win)"
+playing -> lose: "zombie reached\nleft edge"
+playing -> exit: "ESC pressed"
+
+win -> exit: "5 s banner\nthen quit"
+lose -> exit: "5 s banner\nthen quit"

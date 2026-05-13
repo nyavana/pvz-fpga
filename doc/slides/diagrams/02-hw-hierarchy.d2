@@ -1,0 +1,26 @@
+...@_style.d2
+
+direction: down
+
+pvz_top: "pvz_top.sv\nAvalon-MM slave + 51-word register file" { class: hw }
+
+vga_counters: "vga_counters.sv\n640x480 timing" { class: hw }
+bg_grid: "bg_grid.sv\nlawn checker" { class: hw }
+entity_drawer: "entity_drawer.sv\nsprite compositor" { class: hw }
+color_palette: "color_palette.sv\nindex -> 24-bit RGB" { class: hw }
+
+roms: "sprite_rom.sv  (3 instances)" {
+  class: group
+  pea: "peashooter" { class: hw }
+  sun: "sunflower" { class: hw }
+  zom: "zombie" { class: hw }
+}
+
+pvz_top -> vga_counters: "pixel coords"
+pvz_top -> bg_grid: "lawn color"
+pvz_top -> entity_drawer: "regs + coords"
+pvz_top -> color_palette: "RGB out"
+
+entity_drawer -> roms.pea: "read"
+entity_drawer -> roms.sun: "read"
+entity_drawer -> roms.zom: "read"

@@ -1,0 +1,40 @@
+...@_style.d2
+
+direction: down
+
+clock: "Pixel clock  =  25 MHz  (50 MHz / 2)" { class: note }
+
+hline: {
+  class: group
+  grid-rows: 1
+  grid-columns: 4
+
+  h_active: "HACTIVE\n640 px" { class: hw }
+  h_fp: "HFP\n16" { class: reg }
+  h_sync: "HSYNC\n96" { class: mark }
+  h_bp: "HBP\n48" { class: reg }
+
+  h_active -> h_fp -> h_sync -> h_bp
+}
+
+hline_label: "Horizontal scan line  =  800 pixels (1600 input clocks)" { class: note }
+
+vframe: {
+  class: group
+  grid-rows: 1
+  grid-columns: 4
+
+  v_active: "VACTIVE\n480 lines" { class: hw }
+  v_fp: "VFP\n10" { class: reg }
+  v_sync: "VSYNC\n2" { class: mark }
+  v_bp: "VBP\n33" { class: reg }
+
+  v_active -> v_fp -> v_sync -> v_bp
+}
+
+vframe_label: "Vertical frame  =  525 lines" { class: note }
+
+clock -> hline
+hline -> hline_label
+hline_label -> vframe
+vframe -> vframe_label

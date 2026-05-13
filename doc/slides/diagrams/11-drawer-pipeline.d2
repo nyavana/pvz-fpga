@@ -1,0 +1,35 @@
+...@_style.d2
+
+direction: right
+
+inputs: "Per-pixel inputs\n(px, py) from vga_counters\nbg_color from bg_grid\nentity registers" { class: reg }
+
+stage1: "Stage 1  -  hit detect + ROM addr" {
+  class: group
+
+  hit: "compute plant_here,\nsunflower_here, zombie_hit,\npea_hit, cursor_hit,\nsun_hit, selector_hit" { class: hw }
+  addr: "issue plant_rd_addr,\nzombie_rd_addr\n(12-bit, y*64 + x)" { class: hw }
+  flops: "always_ff  -  latch into\n*_d flops at posedge clk\n(this is the 1-cycle delay)" { class: mark }
+
+  hit -> flops
+  addr -> flops
+}
+
+rom: "sprite ROMs\n(plant / sunflower / zombie)\n1-cycle synchronous read" { class: hw }
+
+stage2: "Stage 2  -  layer mux (combinational)" {
+  class: group
+
+  mux: "always_comb priority cascade\nbg -> plants -> sunflowers\n-> peas -> zombies -> cursor\n-> sun HUD -> selector" { class: hw }
+  palette: "color_palette\nindex -> RGB" { class: hw }
+
+  mux -> palette
+}
+
+out: "VGA_R/G/B" { class: ext }
+
+inputs -> stage1
+stage1.addr -> rom: "read addr"
+stage1.flops -> stage2.mux: "*_d signals"
+rom -> stage2.mux: "sprite pixels\n(1 cycle later)"
+stage2.palette -> out

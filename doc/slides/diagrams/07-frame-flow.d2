@@ -1,0 +1,23 @@
+...@_style.d2
+
+direction: down
+
+flow: {
+  class: group
+  grid-rows: 2
+  grid-columns: 5
+
+  usb: "USB key" { class: ext }
+  evdev: "evdev\n/dev/input/eventN" { class: krn }
+  input: "input.c" { class: hps }
+  game: "game.c\ngame_update" { class: hps }
+  render: "render.c\nrender_frame" { class: hps }
+
+  driver: "pvz_driver.ko\nioctl handler" { class: krn }
+  bus: "Avalon-MM\nlw bridge" { class: bus }
+  regfile: "pvz_top\nregister file" { class: hw }
+  drawer: "entity_drawer\nsprite mux" { class: hw }
+  vga: "VGA monitor" { class: ext }
+
+  usb -> evdev -> input -> game -> render -> driver -> bus -> regfile -> drawer -> vga
+}

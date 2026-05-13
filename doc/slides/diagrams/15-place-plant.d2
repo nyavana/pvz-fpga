@@ -1,0 +1,27 @@
+...@_style.d2
+
+direction: down
+
+key: "User presses SPACE" { class: ext }
+
+input: "input.c  -  emits INPUT_SPACE" { class: hps }
+
+dispatch: "process_input\n-> game_place_plant(&gs)" { class: hps }
+
+occ: "cell already occupied?" { class: flow }
+sun: "sun >= 50 ?" { class: flow }
+
+commit: "commit:\ngrid[r][c].type = selected\nhp = 3, fire_cooldown = 120\nsun -= 50" { class: hps }
+
+reject: "reject\n(no change to state)" { class: mark }
+
+render: "next frame render_frame:\n- rebuild PLANTS / SUNFLOWER bitmaps\n- write SUN word\n- ioctl x3" { class: hps }
+
+draw: "entity_drawer paints\nnew plant sprite,\nHUD shows new sun" { class: hw }
+
+key -> input -> dispatch -> occ
+occ -> reject: "yes"
+occ -> sun: "no"
+sun -> reject: "no"
+sun -> commit: "yes"
+commit -> render -> draw

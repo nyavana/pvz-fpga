@@ -1,0 +1,17 @@
+...@_style.d2
+
+direction: right
+
+coord: "Pixel inside cell\n(in_cell_x, in_cell_y)\n0..63 each" { class: reg }
+
+addr: "12-bit address\ny * 64 + x" { class: reg }
+
+rom: "sprite_rom\n64 x 64 = 4 KB\n(1 M10K BRAM)\n1-cycle read" { class: hw }
+
+idx: "8-bit palette index\n0x00..0x0C = colors\n0xFF = transparent" { class: reg }
+
+palette: "color_palette\n256-entry LUT\nindex -> 24-bit RGB" { class: hw }
+
+vga: "VGA DAC pins\nR/G/B [7:0]" { class: ext }
+
+coord -> addr -> rom -> idx -> palette -> vga

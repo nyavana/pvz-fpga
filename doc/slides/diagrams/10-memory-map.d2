@@ -1,0 +1,30 @@
+...@_style.d2
+
+direction: down
+
+hps_space: "HPS physical address space" {
+  class: group
+  grid-rows: 1
+  grid-columns: 3
+
+  ddr3: "0x0000_0000\nDDR3 SDRAM (1 GB)\nkernel + heap + stack" { class: hps }
+  periph: "HPS peripherals\nUART, USB, SD/MMC, GPIO" { class: hps }
+  bridge: "0xFF20_0000\nLW HPS-FPGA bridge\n(pvz_top window)" { class: bus }
+}
+
+window: "pvz_top register window  -  51 words" {
+  class: group
+  grid-rows: 2
+  grid-columns: 4
+
+  w0: "+0x00  word 0\nPLANTS bitmap" { class: reg }
+  w1: "+0x04  word 1\nSUNFLOWER bitmap" { class: reg }
+  gap: "+0x08..0x7C  words 2..31\nunused (alias range)" { class: mark }
+  wz: "+0x80..0x9C  words 32..39\nZOMBIE[0..7]" { class: reg }
+  wp: "+0xA0..0xBC  words 40..47\nPEA[0..7]" { class: reg }
+  w48: "+0xC0  word 48\nCURSOR" { class: reg }
+  w49: "+0xC4  word 49\nSUN" { class: reg }
+  w50: "+0xC8  word 50\nSELECTED" { class: reg }
+}
+
+hps_space.bridge -> window: "zoom"

@@ -1,0 +1,24 @@
+...@_style.d2
+
+direction: down
+
+entry: "game_update(&gs)  -  runs every frame if state == PLAYING" { class: hps }
+
+phases: {
+  class: group
+  grid-rows: 2
+  grid-columns: 4
+
+  p1: "1. update_sun\npassive + sunflowers" { class: hps }
+  p2: "2. update_spawning\nzombie timer" { class: hps }
+  p3: "3. update_firing\nplants fire peas" { class: hps }
+  p4: "4. update_projectiles\nadvance peas" { class: hps }
+  p5: "5. update_zombies\nmove or eat" { class: hps }
+  p6: "6. check_collisions\npea vs zombie" { class: hps }
+  p7: "7. check_win\nall zombies dead?" { class: hps }
+  ret: "return to main loop" { class: hps }
+
+  p1 -> p2 -> p3 -> p4 -> p5 -> p6 -> p7 -> ret
+}
+
+entry -> phases.p1

@@ -1,0 +1,18 @@
+...@_style.d2
+
+direction: down
+
+note: "51 words, byte offset = word_index * 4\nbase = 0xff200000" { class: note }
+
+w0: "Word 0  -  PLANTS  (32-bit bitmap, bit = peashooter at cell)" { class: hw }
+w1: "Word 1  -  SUNFLOWER  (32-bit bitmap, bit = sunflower at cell)" { class: hw }
+
+gap: "Words 2..31  -  unused  (alias range, SW must not write)" { class: mark }
+
+wz: "Words 32..39  -  ZOMBIE[0..7]  (alive | row | x_pixel)" { class: hw }
+wp: "Words 40..47  -  PEA[0..7]  (alive | row | x_pixel)" { class: hw }
+wc: "Word 48  -  CURSOR  (visible | row | col)" { class: hw }
+ws: "Word 49  -  SUN  (14-bit sun count)" { class: hw }
+wsel: "Word 50  -  SELECTED  (0 = peashooter, 1 = sunflower)" { class: hw }
+
+w0 -> w1 -> gap -> wz -> wp -> wc -> ws -> wsel

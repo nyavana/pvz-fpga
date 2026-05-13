@@ -1,0 +1,36 @@
+...@_style.d2
+
+direction: right
+
+hw_lane: "Hardware lane (workstation)" {
+  class: group
+
+  hw_src: "hw/  -  .sv .qsys .tcl .mem" { class: hw }
+  quartus: "Quartus + Platform Designer\nmake qsys; make quartus" { class: hw }
+  rbf: "soc_system.rbf\nFPGA bitstream" { class: reg }
+  dtb: "soc_system.dtb\ndevice tree blob" { class: reg }
+  sd: "SD card  -  FAT partition" { class: ext }
+
+  hw_src -> quartus
+  quartus -> rbf -> sd
+  quartus -> dtb -> sd
+}
+
+sw_lane: "Software lane (workstation or board)" {
+  class: group
+
+  sw_src: "sw/  -  .c .h Makefile" { class: hps }
+  cc: "arm-linux-gnueabihf-gcc\n+ kbuild against linux-4.19" { class: hps }
+  ko: "pvz_driver.ko\nkernel module" { class: reg }
+  bin: "pvz\nuserspace binary" { class: reg }
+  home: "Board home dir  -  scp" { class: ext }
+
+  sw_src -> cc
+  cc -> ko -> home
+  cc -> bin -> home
+}
+
+board: "DE1-SoC  -  boot, fpga load, insmod, run" { class: ext }
+
+hw_lane.sd -> board
+sw_lane.home -> board
