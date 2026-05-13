@@ -1,0 +1,104 @@
+# _style.d2 — shared classes for the PvZ poster diagrams.
+# Each .d2 in this directory spreads it in via: ...@_style.d2
+# Tuned for poster use: larger fonts than the slide variant so the
+# diagram remains legible when printed at poster scale.
+
+classes: {
+  ext: {
+    shape: rectangle
+    style: {
+      fill: "#fde68a"
+      stroke: "#a16207"
+      stroke-width: 3
+      font-size: 28
+      bold: true
+    }
+  }
+  hps: {
+    shape: rectangle
+    style: {
+      fill: "#bfdbfe"
+      stroke: "#1e40af"
+      stroke-width: 3
+      font-size: 26
+      bold: true
+    }
+  }
+  krn: {
+    shape: rectangle
+    style: {
+      fill: "#fef3c7"
+      stroke: "#b45309"
+      stroke-width: 3
+      font-size: 26
+      bold: true
+    }
+  }
+  hw: {
+    shape: rectangle
+    style: {
+      fill: "#bbf7d0"
+      stroke: "#15803d"
+      stroke-width: 3
+      font-size: 26
+      bold: true
+    }
+  }
+  bus: {
+    shape: hexagon
+    style: {
+      fill: "#a5f3fc"
+      stroke: "#0e7490"
+      stroke-width: 3
+      font-size: 26
+      bold: true
+    }
+  }
+  reg: {
+    shape: rectangle
+    style: {
+      fill: "#e2e8f0"
+      stroke: "#475569"
+      stroke-width: 2
+      font-size: 22
+    }
+  }
+  mark: {
+    shape: rectangle
+    style: {
+      fill: "#fbcfe8"
+      stroke: "#9d174d"
+      stroke-width: 3
+      font-size: 26
+      bold: true
+    }
+  }
+  group: {
+    style: {
+      fill: "#f8fafc"
+      stroke: "#475569"
+      stroke-width: 2
+      stroke-dash: 3
+      font-size: 28
+      bold: true
+    }
+  }
+  flow: {
+    shape: oval
+    style: {
+      fill: "#ede9fe"
+      stroke: "#6d28d9"
+      stroke-width: 3
+      font-size: 24
+      bold: true
+    }
+  }
+  note: {
+    shape: text
+    style: {
+      font-size: 20
+      italic: true
+      font-color: "#475569"
+    }
+  }
+}

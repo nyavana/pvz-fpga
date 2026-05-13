@@ -1,0 +1,100 @@
+...@_style.d2
+
+direction: right
+
+title: "Plants vs Zombies on DE1-SoC — System Block Diagram" {
+  near: top-center
+  shape: text
+  style: {
+    font-size: 36
+    bold: true
+  }
+}
+
+# ────────────────────────── External input ──────────────────────────
+input: "USB keyboard\n/ Xbox 360 gamepad" { class: ext }
+
+# ───────────────────────── Terasic DE1-SoC ──────────────────────────
+de1soc: "Terasic DE1-SoC  (Cyclone V SoC)" {
+  class: group
+  grid-columns: 3
+
+  # ─── HPS column ───────────────────────────────────────────────
+  hps: "HPS — ARM Cortex-A9 + Linux 4.19" {
+    class: group
+    grid-rows: 2
+
+    user: "Userspace  (./pvz)" {
+      class: group
+      grid-rows: 4
+
+      input_c:  "input.c\nevdev poll → cursor / place / remove / select" { class: hps }
+      game_c:   "game.c\n5×8 grid, zombies, projectiles, sun, FSM"        { class: hps }
+      render_c: "render.c\npack state → 51-word register image"           { class: hps }
+      main_c:   "main.c\n60 Hz tick: input → update → render → ioctl"     { class: hps }
+
+      input_c -> game_c
+      game_c -> render_c
+      render_c -> main_c
+    }
+
+    driver: "pvz_driver.ko  (/dev/pvz)\nPVZ_WRITE_REG ioctl → iowrite32" { class: krn }
+
+    user.main_c -> driver: "ioctl"
+  }
+
+  # ─── Bridge ───────────────────────────────────────────────────
+  bridge: "Lightweight\nHPS↔FPGA bridge\nAvalon-MM\n@ 0xff200000" { class: bus }
+
+  # ─── FPGA column ──────────────────────────────────────────────
+  fpga: "FPGA fabric — pvz_top.sv  (Avalon-MM slave, 51-word register file)" {
+    class: group
+    grid-rows: 4
+
+    regfile: "Register file\n(plants, zombies, peas, suns, cursor, selected, score)" { class: reg }
+
+    timing: "Timing & background" {
+      class: group
+      grid-columns: 2
+      vga_counters: "vga_counters.sv\n640×480 @ 60 Hz\n(hcount, vcount, HS, VS)" { class: hw }
+      bg_grid:      "bg_grid.sv\nlawn checker background"                       { class: hw }
+    }
+
+    composite: "Sprite compositing" {
+      class: group
+      grid-columns: 2
+
+      drawer: "entity_drawer.sv\nsprite compositor\n(regs + coords → idx)" { class: hw }
+
+      roms: "sprite_rom.sv  ×3" {
+        class: group
+        grid-rows: 3
+        pea: "peashooter  64×64 idx" { class: hw }
+        sun: "sunflower   64×64 idx" { class: hw }
+        zom: "zombie      32×64 idx" { class: hw }
+      }
+
+      drawer -> roms.pea: "read"
+      drawer -> roms.sun: "read"
+      drawer -> roms.zom: "read"
+    }
+
+    palette: "color_palette.sv\n8-bit index → 24-bit RGB" { class: hw }
+
+    regfile             -> composite.drawer: "entity state"
+    timing.vga_counters -> composite.drawer: "x, y"
+    timing.vga_counters -> timing.bg_grid:   "x, y"
+    composite.drawer    -> palette:          "fg idx"
+    timing.bg_grid      -> palette:          "bg idx"
+  }
+
+  hps.driver -> bridge: "32-bit writes"
+  bridge     -> fpga.regfile: "latch @ vsync"
+}
+
+# ───────────────────────── External output ──────────────────────────
+monitor: "VGA monitor\n640 × 480 @ 60 Hz" { class: ext }
+
+# ───────────────────────── Edge wiring ──────────────────────────────
+input               -> de1soc.hps.user.input_c: "USB / evdev"
+de1soc.fpga.palette -> monitor:                 "RGB + HS/VS"
